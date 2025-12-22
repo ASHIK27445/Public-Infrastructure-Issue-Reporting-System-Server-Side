@@ -5,8 +5,6 @@ require('dotenv').config()
 
 const port = process.env.PORT
 
-//WCLQMbi9EB6y6CGM
-
 const app = express()
 app.use(cors())
 app.use(express.json())
@@ -19,6 +17,26 @@ const serviceAccount = JSON.parse(decoded);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
+
+const verifyFBToken = async (req, res, next) => {
+  const token = req.headers.authorization;
+
+  if(!token){
+    return res.status(401).send({message: 'unauthorized access'})
+  }
+
+  try{
+    const idToken = token.split(' ')[1]
+    const decoded = await admin.auth().verifyIdToken(idToken)
+    console.log("decoded info", decoded)
+    req.decoded_email = decoded.email
+    next()
+  }catch(err){
+    return res.status(401).send({message: 'unauthorized access'})
+  }
+}
+
+
 
 
 
