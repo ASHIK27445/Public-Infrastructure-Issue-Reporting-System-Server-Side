@@ -82,6 +82,13 @@ async function run() {
       res.send(result)
     })
 
+    app.get('/detailIssues/:id', verifyFBToken, async(req, res)=>{
+      const {id} = req.params
+      const query = {_id: new ObjectId(id)}
+      const result = await issueCollection.findOne(query)
+      res.send(result)
+    })
+
     //post method
     app.post('/users', async(req, res)=>{
         const userInfo = req.body
