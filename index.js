@@ -77,6 +77,10 @@ async function run() {
       res.send(result)
     })
 
+    app.get('/allissues', async(req, res)=>{
+      const result = await issueCollection.find().toArray()
+      res.send(result)
+    })
 
     //post method
     app.post('/users', async(req, res)=>{
