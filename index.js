@@ -11,7 +11,7 @@ app.use(express.json())
 
 const admin = require("firebase-admin")
 
-const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const decoded = Buffer.from(process.env.FB_KEY, 'base64').toString('utf8')
 const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
@@ -86,7 +86,7 @@ async function run() {
         res.send(result)
     })
 
-    app.post('/addissue', async(req, res)=>{
+    app.post('/addissue', verifyFBToken, async(req, res)=>{
       const data = req.body
       data.createdAt = new Date()
       const result = await issueCollection.insertOne(data)
