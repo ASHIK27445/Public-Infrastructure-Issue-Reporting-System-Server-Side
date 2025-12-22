@@ -42,6 +42,13 @@ async function run() {
         res.send(result)
     })
 
+    app.get('/manageissues/:email', async(req, res)=>{
+      const {email}= req.params
+      const query = {citizenEmail: email}
+      const result = await issueCollection.find(query).toArray()
+      res.send(result)
+    })
+
 
     //post method
     app.post('/users', async(req, res)=>{
