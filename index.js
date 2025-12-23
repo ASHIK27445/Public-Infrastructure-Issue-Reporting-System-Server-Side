@@ -90,6 +90,7 @@ async function run() {
     })
 
     //post method
+
     //User Registration
     app.post('/users', async(req, res)=>{
         const userInfo = req.body
@@ -102,9 +103,23 @@ async function run() {
         res.send(result)
     })
 
+    //Adding Issues
     app.post('/addissue', verifyFBToken, async(req, res)=>{
       const data = req.body
+      const user = await userCollection.findOne({email: data.citizenEmail})
+      if(!user){
+        return res.status(401).send("User not found")
+      }
+      data.reportBy = user._id
+      delete data.citizenEmail
+
+      data.status = 'pending'
+      data.priority = 'normal'
+      data.upvotes = []
+      data.upvoteCount = 0
+      data.assignInto = null
       data.createdAt = new Date()
+      console.log(data)
       const result = await issueCollection.insertOne(data)
       res.send(result)
     })
