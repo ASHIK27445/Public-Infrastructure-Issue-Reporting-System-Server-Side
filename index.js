@@ -90,8 +90,13 @@ async function run() {
     })
 
     //post method
+    //User Registration
     app.post('/users', async(req, res)=>{
         const userInfo = req.body
+        userInfo.role = 'citizen'
+        userInfo.isPremium = false
+        userInfo.isBlocked = false
+        userInfo.issueCount = 0
         userInfo.createdAt = new Date()
         const result = await userCollection.insertOne(userInfo)
         res.send(result)
@@ -111,7 +116,7 @@ async function run() {
     //delete method
 
 
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
 
