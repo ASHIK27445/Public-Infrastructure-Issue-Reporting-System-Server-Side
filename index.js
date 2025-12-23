@@ -78,8 +78,38 @@ async function run() {
     })
 
     app.get('/allissues', async(req, res)=>{
-      const result = await issueCollection.find().toArray()
+      // const result = await issueCollection.find().toArray()
+      // res.send(result)
+      //better approach
+      const result = await issueCollection.aggregate([
+        {
+          $lookup: {
+            from: 'user',  //from which collection i want to lookup
+            localField: 'reportBy',   //which field to select
+            foreignField: '_id',       // field in user collection 
+            // and “Match issueCollection.reportBy with userCollection._id”
+            as: 'reporterInfo'
+          }
+        },
+        {
+            $addFields: {
+              reporterName: { $arrayElemAt: ['$reporterInfo.name', 0]},
+              reporterPhoto: {$arrayElemAt: ['$reporterInfo.photoURL', 0]}
+              //$arrayElemAt: [ <array>, <index> ]
+              // array → the array you want to get element from
+              // index → which element (starts from 0)
+              //Take the first element of the reporterInfo.name array
+            }
+        },
+        {
+          $project:{
+            reporterInfo : 0 //hide original array sothat i can fetch only two item
+          }
+        }
+      ]).toArray()
+
       res.send(result)
+
     })
 
     app.get('/detailIssues/:id', verifyFBToken, async(req, res)=>{
@@ -113,8 +143,8 @@ async function run() {
       data.reportBy = user._id
       delete data.citizenEmail
 
-      data.status = 'pending'
-      data.priority = 'normal'
+      data.status = 'Pending'
+      data.priority = 'Normal'
       data.upvotes = []
       data.upvoteCount = 0
       data.assignInto = null
