@@ -114,8 +114,32 @@ async function run() {
 
     app.get('/detailIssues/:id', verifyFBToken, async(req, res)=>{
       const {id} = req.params
-      const query = {_id: new ObjectId(id)}
-      const result = await issueCollection.findOne(query)
+      const result = await issueCollection.aggregate([
+          {
+              $match: { _id: new ObjectId(id) }
+          },
+          {
+              $lookup: {
+                  from: 'user',          
+                  localField: 'reportBy', 
+                  foreignField: '_id', 
+                  as: 'reporterInfo'         
+              }
+          },
+          {
+              $addFields: {
+                reporterName: { $arrayElemAt: ['$reporterInfo.name', 0]},
+                reporterPhoto: {$arrayElemAt: ['$reporterInfo.photoURL', 0]},
+                reporterJoined:{$arrayElemAt:['$reporterInfo.createdAt', 0]}
+
+              }
+          },
+          {
+            $project:{
+              reporterInfo : 0 
+            }
+          }
+      ]).next() //Changed .toArray() to .next() to get a single document, because we got an array
       res.send(result)
     })
 
