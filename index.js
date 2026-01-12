@@ -28,7 +28,7 @@ const verifyFBToken = async (req, res, next) => {
   try{
     const idToken = token.split(' ')[1]
     const decoded = await admin.auth().verifyIdToken(idToken)
-    console.log("decoded info", decoded)
+    // console.log("decoded info", decoded)
     req.decoded_email = decoded.email
     next()
   }catch(err){
@@ -229,19 +229,45 @@ async function run() {
       res.send(result)
     })
 
+    //Adding Staff
+    app.post('/addstaff', verifyFBToken, async(req, res)=> {
+      const {email, password, name, photoURL, tel, dept}= req.body
+
+      const userRecord = await admin.auth().createUser({
+        email, 
+        password,
+        displayName: name,
+        photoURL,
+        phoneNumber: tel
+      })
+      const staffInfo = {
+        name, email, password, photoURL, tel
+      }
+      staffInfo.uid = userRecord.uid
+      staffInfo.role = 'staff'
+      staffInfo.dept = dept
+      staffInfo.isBlocked = false
+      staffInfo.assignIssued = 0
+      staffInfo.resolvedIssued = 0
+      staffInfo.createdAt = new Date()
+      console.log(staffInfo)
+      const result = await userCollection.insertOne(staffInfo)
+      res.send(result)
+    })
+
     //put/update method
     //update user status
-app.patch('/update/user/status', verifyFBToken, async (req, res) => {
-  const { email, isBlocked } = req.body; // ✅ BODY
+    app.patch('/update/user/status', verifyFBToken, async (req, res) => {
+      const { email, isBlocked } = req.body; // ✅ BODY
 
-  const query = { email };
-  const updateIsBlocked = {
-    $set: { isBlocked }
-  };
+      const query = { email };
+      const updateIsBlocked = {
+        $set: { isBlocked }
+      };
 
-  const result = await userCollection.updateOne(query, updateIsBlocked);
-  res.send(result);
-});
+      const result = await userCollection.updateOne(query, updateIsBlocked);
+      res.send(result);
+    });
 
     
     // UPDATE: Edit an issue
