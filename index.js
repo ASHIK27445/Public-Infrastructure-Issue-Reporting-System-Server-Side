@@ -150,6 +150,13 @@ async function run() {
       res.send(result)
     })
 
+    //all staff get:
+    app.get('/allstaff', verifyFBToken, async(req, res)=>{
+      const query = {role: 'staff'}
+      const result = await userCollection.find(query).toArray()
+      res.send(result)
+    })
+
     //user get:
     app.get('/user/citizen', verifyFBToken, async(req, res)=>{
       const email = req.decoded_email
@@ -255,7 +262,10 @@ async function run() {
       res.send(result)
     })
 
+    //---------------------------------------------------------------------//
     //put/update method
+    //---------------------------------------------------------------------//
+
     //update user status
     app.patch('/update/user/status', verifyFBToken, async (req, res) => {
       const { email, isBlocked } = req.body; // ✅ BODY
@@ -269,6 +279,39 @@ async function run() {
       res.send(result);
     });
 
+    //update staff info
+    app.patch('/update/staff/info', verifyFBToken, async(req, res)=>{
+    const adminUser = await userCollection.findOne({ email: req.decoded_email });
+    
+    if (!adminUser || adminUser.role !== 'admin') {
+      return res.status(403).send({ message: "Forbidden! Admin access required" });
+    }
+
+    const {uid, name, password, tel, dept} = req.body
+
+      /* ---------- Firebase Auth update ---------- */
+    const authUpdateData = {}
+    if (name) authUpdateData.displayName = name
+    if (password) authUpdateData.password = password
+
+    if (Object.keys(authUpdateData).length > 0) {
+      await admin.auth().updateUser(uid, authUpdateData)
+    }
+
+    /* ---------- MongoDB update ---------- */
+    const query = { uid }
+    const updateStaff = {
+      $set: {
+        name,
+        tel,
+        dept,
+        updatedAt: new Date()
+      }
+    }
+
+    const result = await userCollection.updateOne(query, updateStaff)
+    res.send(result)
+    })
     
     // UPDATE: Edit an issue
     app.patch('/issue/:id', verifyFBToken, async(req, res) => {
