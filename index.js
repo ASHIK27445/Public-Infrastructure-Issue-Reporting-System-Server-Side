@@ -259,7 +259,7 @@ async function run() {
       staffInfo.createdAt = new Date()
       console.log(staffInfo)
       const result = await userCollection.insertOne(staffInfo)
-      res.send(result)
+      res.send({_id: result.insertedId, ...staffInfo})
     })
 
     //---------------------------------------------------------------------//
@@ -452,8 +452,49 @@ async function run() {
       }
     });
 
+    //------------------------------------------------------------------------------------//
     //delete method
-    
+    //------------------------------------------------------------------------------------//
+
+    //Delete staff:
+    app.delete('/delete/staff/:id', verifyFBToken, async(req, res)=> {
+      const adminUser = await userCollection.findOne({email: req.decoded_email})
+
+      //checking admin
+      if(!adminUser || adminUser.role !== 'admin'){
+        return res.status(403).send({message: "Admin access required"})
+      }
+
+      //find staff
+      const {id} = req.params
+      const staff = await userCollection.findOne({
+        _id: new ObjectId(id),
+        role: 'staff'
+      })
+
+      //check staff
+      if(!staff){
+        return res.status(403).send({message: "Staff not found!"})
+      }
+
+      //check assigned issues
+      if(staff.assignIssued > 0){
+        return res.status(400).send({
+          message: `Can't Delete. Staff has ${staff.assignIssued} assigned issue(s).`,
+          assignIssued: staff.assignIssued
+        })
+      }
+
+      //delete from firebase
+      await admin.auth().deleteUser(staff.uid)
+
+      //delete from mongodb
+      const query = {_id: new ObjectId(id)}
+      const result = await userCollection.deleteOne(query)
+
+      res.send(result)
+    })
+
     // DELETE: Remove an issue (user can only delete their own issues)
     app.delete('/issue/:id', verifyFBToken, async(req, res) => {
       try {
