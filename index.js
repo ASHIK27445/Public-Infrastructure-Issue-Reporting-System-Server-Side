@@ -60,6 +60,7 @@ async function run() {
     const database = client.db('PIIRS')
     const userCollection = database.collection('user')
     const issueCollection = database.collection('issue')
+    const timelineCollection = database.collection('timeline')
     
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -143,6 +144,12 @@ async function run() {
       res.send(result)
     })
 
+    //all users get:
+    app.get('/allusers', verifyFBToken, async(req, res)=> {
+      const result = await userCollection.find().toArray()
+      res.send(result)
+    })
+
     //user get:
     app.get('/user/citizen', verifyFBToken, async(req, res)=>{
       const email = req.decoded_email
@@ -180,6 +187,21 @@ async function run() {
       if(!user){
         return res.status(401).send("User not found")
       }
+
+      // Check if user is blocked
+      if(user.isBlocked){
+        return res.status(403).send({message: "Your account is blocked. Cannot report issues."})
+      }
+
+      // Check issue limit for free users
+      const FREE_USER_LIMIT = 3;
+      if(!user.isPremium && user.issueCount >= FREE_USER_LIMIT){
+        return res.status(403).send({
+          message: "You have reached your free issue limit. Please upgrade to Premium.",
+          requiresPremium: true
+        })
+      }
+
       data.reportBy = user._id
       delete data.citizenEmail
 
@@ -189,184 +211,223 @@ async function run() {
       data.upvoteCount = 0
       data.assignInto = null
       data.createdAt = new Date()
+      
       console.log(data)
+      
+      // Insert the issue
       const result = await issueCollection.insertOne(data)
+      
+      // Increment user's issue count
+      await userCollection.updateOne(
+        { _id: user._id },
+        { 
+          $inc: { issueCount: 1 },
+          $set: { updatedAt: new Date() }
+        }
+      )
+      
       res.send(result)
     })
 
     //put/update method
+    //update user status
+app.patch('/update/user/status', verifyFBToken, async (req, res) => {
+  const { email, isBlocked } = req.body; // ✅ BODY
+
+  const query = { email };
+  const updateIsBlocked = {
+    $set: { isBlocked }
+  };
+
+  const result = await userCollection.updateOne(query, updateIsBlocked);
+  res.send(result);
+});
+
     
-    // // UPDATE: Edit an issue (only for pending issues)
-    // app.patch('/issue/:id', verifyFBToken, async(req, res) => {
-    //   try {
-    //     const { id } = req.params;
-    //     const updateData = req.body;
-    //     const email = req.decoded_email;
+    // UPDATE: Edit an issue
+    app.patch('/issue/:id', verifyFBToken, async(req, res) => {
+      try {
+        const { id } = req.params;
+        const updateData = req.body;
+        const email = req.decoded_email;
 
-    //     // First, get the user to verify ownership
-    //     const user = await userCollection.findOne({email});
-    //     if (!user) {
-    //       return res.status(401).send({ message: 'User not found' });
-    //     }
+        // First, get the user to verify ownership
+        const user = await userCollection.findOne({email});
+        if (!user) {
+          return res.status(401).send({ message: 'User not found' });
+        }
 
-    //     // Check if the issue exists and belongs to this user
-    //     const issue = await issueCollection.findOne({ 
-    //       _id: new ObjectId(id),
-    //       reportBy: user._id
-    //     });
+        // Check if the issue exists and belongs to this user
+        const issue = await issueCollection.findOne({ 
+          _id: new ObjectId(id),
+          reportBy: user._id
+        });
 
-    //     if (!issue) {
-    //       return res.status(404).send({ message: 'Issue not found or you do not have permission to edit it' });
-    //     }
+        if (!issue) {
+          return res.status(404).send({ message: 'Issue not found or you do not have permission to edit it' });
+        }
 
-    //     // Only allow editing if status is Pending
-    //     if (issue.status !== 'Pending') {
-    //       return res.status(403).send({ message: 'Can only edit pending issues' });
-    //     }
-
-    //     // Update allowed fields only
-    //     const allowedFields = ['title', 'description', 'category', 'location'];
-    //     const filteredUpdate = {};
+        // If updating regular fields (not just status), only allow editing if status is Pending
+        const isStatusOnlyUpdate = Object.keys(updateData).length === 1 && updateData.status;
         
-    //     for (const field of allowedFields) {
-    //       if (updateData[field] !== undefined) {
-    //         filteredUpdate[field] = updateData[field];
-    //       }
-    //     }
+        if (!isStatusOnlyUpdate && issue.status !== 'Pending') {
+          return res.status(403).send({ message: 'Can only edit content of pending issues' });
+        }
 
-    //     // Add updatedAt timestamp
-    //     filteredUpdate.updatedAt = new Date();
+        // Update allowed fields only
+        const allowedFields = ['title', 'description', 'category', 'location', 'status', 'priority'];
+        const filteredUpdate = {};
+        
+        for (const field of allowedFields) {
+          if (updateData[field] !== undefined) {
+            filteredUpdate[field] = updateData[field];
+          }
+        }
 
-    //     const result = await issueCollection.updateOne(
-    //       { _id: new ObjectId(id) },
-    //       { $set: filteredUpdate }
-    //     );
+        // Add updatedAt timestamp
+        filteredUpdate.updatedAt = new Date();
 
-    //     res.send(result);
-    //   } catch (error) {
-    //     console.error('Error updating issue:', error);
-    //     res.status(500).send({ message: 'Failed to update issue' });
-    //   }
-    // });
+        const result = await issueCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: filteredUpdate }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating issue:', error);
+        res.status(500).send({ message: 'Failed to update issue' });
+      }
+    });
+
+    // PROFILE UPDATE: Update user profile information
+    app.patch('/user/update', verifyFBToken, async(req, res) => {
+      try {
+        const email = req.decoded_email;
+        const { name, phone, address } = req.body;
+
+        // Find user
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+
+        // Update fields
+        const updateData = {};
+        if (name) updateData.name = name;
+        if (phone) updateData.phone = phone;
+        if (address) updateData.address = address;
+        updateData.updatedAt = new Date();
+
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: updateData }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).send({ message: 'Failed to update profile' });
+      }
+    });
+
+    // SUBSCRIBE: Make user premium
+    app.post('/user/subscribe', verifyFBToken, async(req, res) => {
+      try {
+        const email = req.decoded_email;
+        const { amount, userId } = req.body;
+
+        // Find user
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+
+        // Check if already premium
+        if (user.isPremium) {
+          return res.status(400).send({ message: 'User is already premium' });
+        }
+
+        // Check if blocked
+        if (user.isBlocked) {
+          return res.status(403).send({ message: 'Blocked users cannot subscribe' });
+        }
+
+        // In production, integrate with payment gateway here
+        // For now, we'll just update the user status
+        
+        // Verify payment amount
+        if (amount !== 1000) {
+          return res.status(400).send({ message: 'Invalid payment amount' });
+        }
+
+        // Update user to premium
+        const result = await userCollection.updateOne(
+          { email },
+          { 
+            $set: { 
+              isPremium: true,
+              subscribedAt: new Date(),
+              updatedAt: new Date()
+            } 
+          }
+        );
+
+        res.send({ 
+          success: true, 
+          message: 'Successfully subscribed to premium!',
+          data: result
+        });
+      } catch (error) {
+        console.error('Error subscribing:', error);
+        res.status(500).send({ message: 'Subscription failed' });
+      }
+    });
 
     //delete method
     
-    // // DELETE: Remove an issue (user can only delete their own issues)
-    // app.delete('/issue/:id', verifyFBToken, async(req, res) => {
-    //   try {
-    //     const { id } = req.params;
-    //     const email = req.decoded_email;
+    // DELETE: Remove an issue (user can only delete their own issues)
+    app.delete('/issue/:id', verifyFBToken, async(req, res) => {
+      try {
+        const { id } = req.params;
+        const email = req.decoded_email;
 
-    //     // Get the user
-    //     const user = await userCollection.findOne({email});
-    //     if (!user) {
-    //       return res.status(401).send({ message: 'User not found' });
-    //     }
+        // Get the user
+        const user = await userCollection.findOne({email});
+        if (!user) {
+          return res.status(401).send({ message: 'User not found' });
+        }
 
-    //     // Check if the issue exists and belongs to this user
-    //     const issue = await issueCollection.findOne({ 
-    //       _id: new ObjectId(id),
-    //       reportBy: user._id
-    //     });
+        // Check if the issue exists and belongs to this user
+        const issue = await issueCollection.findOne({ 
+          _id: new ObjectId(id),
+          reportBy: user._id
+        });
 
-    //     if (!issue) {
-    //       return res.status(404).send({ message: 'Issue not found or you do not have permission to delete it' });
-    //     }
+        if (!issue) {
+          return res.status(404).send({ message: 'Issue not found or you do not have permission to delete it' });
+        }
 
-    //     // Delete the issue
-    //     const result = await issueCollection.deleteOne({ _id: new ObjectId(id) });
+        // Delete the issue
+        const result = await issueCollection.deleteOne({ _id: new ObjectId(id) });
 
-    //     res.send(result);
-    //   } catch (error) {
-    //     console.error('Error deleting issue:', error);
-    //     res.status(500).send({ message: 'Failed to delete issue' });
-    //   }
-    // });
+        // Decrement user's issue count
+        await userCollection.updateOne(
+          { _id: user._id },
+          { 
+            $inc: { issueCount: -1 },
+            $set: { updatedAt: new Date() }
+          }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error deleting issue:', error);
+        res.status(500).send({ message: 'Failed to delete issue' });
+      }
+    });
 
     
-    
-    // app.patch('/user/update', verifyFBToken, async(req, res) => {
-    //   try {
-    //     const email = req.decoded_email;
-    //     const { name, phone, address } = req.body;
 
-    //     // Find user
-    //     const user = await userCollection.findOne({ email });
-    //     if (!user) {
-    //       return res.status(404).send({ message: 'User not found' });
-    //     }
-
-    //     // Update fields
-    //     const updateData = {};
-    //     if (name) updateData.name = name;
-    //     if (phone) updateData.phone = phone;
-    //     if (address) updateData.address = address;
-    //     updateData.updatedAt = new Date();
-
-    //     const result = await userCollection.updateOne(
-    //       { email },
-    //       { $set: updateData }
-    //     );
-
-    //     res.send(result);
-    //   } catch (error) {
-    //     console.error('Error updating profile:', error);
-    //     res.status(500).send({ message: 'Failed to update profile' });
-    //   }
-    // });
-
-    // // SUBSCRIBE: Make user premium
-    // app.post('/user/subscribe', verifyFBToken, async(req, res) => {
-    //   try {
-    //     const email = req.decoded_email;
-    //     const { amount, userId } = req.body;
-
-    //     // Find user
-    //     const user = await userCollection.findOne({ email });
-    //     if (!user) {
-    //       return res.status(404).send({ message: 'User not found' });
-    //     }
-
-    //     // Check if already premium
-    //     if (user.isPremium) {
-    //       return res.status(400).send({ message: 'User is already premium' });
-    //     }
-
-    //     // Check if blocked
-    //     if (user.isBlocked) {
-    //       return res.status(403).send({ message: 'Blocked users cannot subscribe' });
-    //     }
-
-    //     // In production, integrate with payment gateway here
-    //     // For now, we'll just update the user status
-        
-    //     // Verify payment amount
-    //     if (amount !== 1000) {
-    //       return res.status(400).send({ message: 'Invalid payment amount' });
-    //     }
-
-    //     // Update user to premium
-    //     const result = await userCollection.updateOne(
-    //       { email },
-    //       { 
-    //         $set: { 
-    //           isPremium: true,
-    //           subscribedAt: new Date(),
-    //           updatedAt: new Date()
-    //         } 
-    //       }
-    //     );
-
-    //     res.send({ 
-    //       success: true, 
-    //       message: 'Successfully subscribed to premium!',
-    //       data: result
-    //     });
-    //   } catch (error) {
-    //     console.error('Error subscribing:', error);
-    //     res.status(500).send({ message: 'Subscription failed' });
-    //   }
-    // });
 
     // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
