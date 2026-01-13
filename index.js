@@ -262,6 +262,60 @@ async function run() {
       res.send({_id: result.insertedId, ...staffInfo})
     })
 
+    //Assign staff
+    app.post('/assign-staff', verifyFBToken, async(req, res)=> {
+    /*--------------------Admin check--------------------------*/
+    const adminUser = await userCollection.findOne({ email: req.decoded_email });
+    
+    if (!adminUser || adminUser.role !== 'admin') {
+      return res.status(403).send({ message: "Forbidden! Admin access required" });
+    }
+
+    const {issueId, staffId} = req.body
+
+    /**-----------------Staff query----------------------------- */
+    const staff = await userCollection.findOne({_id: new ObjectId(staffId)})
+    if(!staff){
+      return res.status(404).send({message: "Staff not found!"})
+    }
+
+    /**------------------Assign Staff and Issue Update----------- */
+    const issueQuery = {_id: new ObjectId(issueId)}
+    const issue = await issueCollection.findOne(issueQuery);
+    if (!issue || issue.assignInto) {
+      return res.status(400).send({ message: "Issue already assigned" });
+    }
+    const issueUpdate = {
+      $set: {
+        assignInto: staff._id,
+        assignedStaff: {
+          _id: staff._id,
+          name: staff.name,
+          department: staff.dept,
+          tel: staff.tel,
+          photoURL: staff.photoURL,
+          assignedAt: new Date(),
+          assignBy: adminUser.name
+        }
+        
+      }
+    }
+
+    const issueResult = await issueCollection.findOneAndUpdate(issueQuery, issueUpdate, {returnDocument: 'after'})
+
+    /**-------------------Assign Count----------------------------- */
+    const assignCount = {
+      $inc: {assignIssued: 1}
+    }
+
+    await userCollection.updateOne({_id: staff._id}, assignCount)
+
+    // console.log(issueResult)
+
+    /**------------------Sending Response---------------------------*/
+    res.send({success: true, issue: issueResult})
+    })
+
     //---------------------------------------------------------------------//
     //put/update method
     //---------------------------------------------------------------------//
