@@ -422,6 +422,34 @@ async function run() {
       }
     });
 
+    //UPDATE: Rejected issue
+    app.patch('/reject-issue', verifyFBToken, async(req, res)=> {
+    /**----------------------Admin Check----------------------------- */
+    const adminUser = await userCollection.findOne({ email: req.decoded_email });
+    
+    if (!adminUser || adminUser.role !== 'admin') {
+      return res.status(403).send({ message: "Forbidden! Admin access required" });
+    }
+
+    const {issueId, reason} = req.body
+
+    /**--------------------Update Issue Status---------------------- */
+    const query = {_id: new ObjectId(issueId)}
+    const update = {
+        $set: {
+          status: 'Rejected',
+          rejectedReason: reason,
+          rejectedBy: adminUser.name,
+          rejectedAt: new Date()
+        }
+    }
+
+    const result = await issueCollection.updateOne(query, update)
+
+    res.send(result)
+
+    })
+
     // PROFILE UPDATE: Update user profile information
     app.patch('/user/update', verifyFBToken, async(req, res) => {
       try {
