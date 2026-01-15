@@ -173,6 +173,46 @@ async function run() {
       res.send(result)
     })
     
+    app.get('/assigned-issues/:staffId', verifyFBToken, async(req, res)=> {
+      const {staffId} = req.params
+
+      // First get all issues
+      const issues = await issueCollection.find({ 
+        assignInto: new ObjectId(staffId) 
+      }).toArray()
+
+      // Then populate reporter for each issue
+      const populatedIssues = await Promise.all(
+        issues.map(async (issue) => {
+          try {
+            const reporter = await userCollection.findOne(
+              { _id: new ObjectId(issue.reportBy) }, // Convert string to ObjectId
+              { 
+                projection: { 
+                  name: 1, 
+                  email: 1, 
+                  photoURL: 1 
+                } 
+              }
+            )
+            
+            return {
+              ...issue,
+              reporter: reporter || null
+            }
+          } catch (error) {
+            console.error('Error populating reporter:', error)
+            return {
+              ...issue,
+              reporter: null
+            }
+          }
+        })
+      )
+
+      res.send(populatedIssues)
+    })
+
     //post method
 
     //User Registration
@@ -294,6 +334,7 @@ async function run() {
           department: staff.dept,
           tel: staff.tel,
           photoURL: staff.photoURL,
+          email: staff.email,
           assignedAt: new Date(),
           assignBy: adminUser.name
         }
