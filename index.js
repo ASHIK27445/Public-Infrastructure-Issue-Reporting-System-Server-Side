@@ -491,6 +491,72 @@ async function run() {
 
     })
 
+    //UPDATE: Issue status
+    app.patch('/update-issue-status/:issueId', verifyFBToken, async(req, res)=> {
+      const {issueId}= req.params
+      const {newStatus, closeReason} = req.body
+
+      const issueQuery = {_id: new ObjectId(issueId)}
+      const issue = await issueCollection.findOne(issueQuery)
+
+      if (!issue) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Issue not found' 
+        })
+      }
+
+      const updateData = {
+        status: newStatus,
+        updatedAt: new Date()
+      }
+
+       if (newStatus === 'In-Progress') {
+      updateData.inProgressAt = new Date();
+      } 
+      else if (newStatus === 'Working') {
+        updateData.workingAt = new Date();
+      }
+      else if (newStatus === 'Resolved') {
+        updateData.resolvedAt = new Date();
+
+        if(issue.assignInto){
+          await userCollection.updateOne(
+          { _id: issue.assignInto},
+          {$inc: {
+            assignIssued: -1,
+            resolvedIssued: 1
+          }})
+        }
+
+      }
+      else if (newStatus === 'Closed') {
+        updateData.closedAt = new Date();
+
+        if(closeReason){
+          updateData.closeNote = closeReason
+        }
+
+        if(issue.assignInto && !issue.resolvedAt){
+          await userCollection.updateOne(
+            { _id: issue.assignInto},
+            {$inc: {
+              assignIssued: -1
+            }}
+          )
+        }
+      }
+      
+      // Update the issue
+      const result = await issueCollection.updateOne(
+        { _id: new ObjectId(issueId) },
+        { $set: updateData }
+      )
+
+      res.send(result)
+
+    })
+
     // PROFILE UPDATE: Update user profile information
     app.patch('/user/update', verifyFBToken, async(req, res) => {
       try {
