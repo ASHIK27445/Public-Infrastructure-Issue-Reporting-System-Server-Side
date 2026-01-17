@@ -365,6 +365,89 @@ async function run() {
     res.send({success: true, issue: issueResult})
     })
 
+    //upvote
+    app.post('/upvote/:issueId', verifyFBToken, async(req, res)=> {
+      const {issueId} = req.params
+      const userEmail = req.decoded_email
+
+      /**---------------------Find User-------------------------- */
+      const user = await userCollection.findOne({email: userEmail})
+      if(!user){
+        return res.status(404).send({message: "User not found!"})
+      }
+
+      /**----------------------Find Issue------------------------ */
+      const issue = await issueCollection.findOne({_id: new ObjectId(issueId)})
+      if (!issue) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Issue not found" 
+            });
+        }
+        
+        //Check if user owns the issue
+        if (issue.reportBy.toString() === user._id.toString()) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "You cannot upvote your own issue" 
+            })
+        }
+
+        /**-------------------------find Upvote---------------------- */
+        const upvote = await upvoteCollection.findOne({_id: new ObjectId(issueId)})
+
+        const userIdStr = user._id.toString()
+
+        /********check if already upvoted***********/
+        if(upvote && upvote.upvoteUsers[userIdStr]){
+          //remove upvote(toggle)
+          await upvoteCollection.updateOne(
+            {_id: new ObjectId(issueId)},
+            {
+              $unset: {[`upvoteUsers.${userIdStr}`]: ''},
+              $inc: {count: -1},
+              $set: {updatedAt: new Date()}
+            }
+          )
+
+        //updated upvote from database
+        const updateUpvote = await upvoteCollection.findOne({_id: new ObjectId(issueId)})
+
+        //sent response
+        return res.json({
+          success: true,
+          message: 'upvote remove',
+          upvoteCount: updateUpvote?.count || 0,
+          hasUpvoted: false
+          })
+          
+        }
+
+        /*********Add Upvote******************** */
+        await upvoteCollection.updateOne(
+          {_id: new ObjectId(issueId)},
+          {
+            $set: {
+              [`upvoteUsers.${userIdStr}`]: true,
+              updatedAt: new Date()
+            },
+            $inc: {count: 1}
+          },
+          {upsert: true}
+        )//doesn't neceesary to use upsert here;
+
+        const updateUpvote = await upvoteCollection.findOne({ 
+            _id: new ObjectId(issueId) 
+        });
+        
+        res.json({
+            success: true,
+            message: "Upvoted successfully",
+            upvoteCount: updateUpvote.count || 0,
+            hasUpvoted: true
+        });
+    })
+
     //---------------------------------------------------------------------//
     //put/update method
     //---------------------------------------------------------------------//
