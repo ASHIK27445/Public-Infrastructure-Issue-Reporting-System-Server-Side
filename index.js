@@ -214,6 +214,20 @@ async function run() {
       res.send(populatedIssues)
     })
 
+    //get upvote info
+    app.get('/upvote-info/:issueId', verifyFBToken, async(req, res)=> {
+      const {issueId} = req.params
+      const userEmail = req.decoded_email
+      const user = await userCollection.findOne({email: userEmail})
+      const query = {_id: new ObjectId(issueId)}
+      const result = await upvoteCollection.findOne(query)
+
+      const hasUpvoted = result?.upvoteUsers?.[user?._id.toString()] || false
+      const count = result?.count
+
+      res.send({hasUpvoted, count})
+    })
+
     //post method
 
     //User Registration
