@@ -60,6 +60,7 @@ async function run() {
     const database = client.db('PIIRS')
     const userCollection = database.collection('user')
     const issueCollection = database.collection('issue')
+    const upvoteCollection = database.collection('upvote')
     const timelineCollection = database.collection('timeline')
     
     //get method
@@ -264,6 +265,13 @@ async function run() {
       // Insert the issue
       const result = await issueCollection.insertOne(data)
       
+      //create upvote 
+      await upvoteCollection.insertOne({
+        _id: result.insertedId,
+        upvoteUsers: {},
+        count: 0
+      })
+
       // Increment user's issue count
       await userCollection.updateOne(
         { _id: user._id },
