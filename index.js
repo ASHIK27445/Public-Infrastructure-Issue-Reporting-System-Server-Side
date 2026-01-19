@@ -1,7 +1,8 @@
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const express = require('express')
-const cors = require('cors')
 require('dotenv').config()
+const express = require('express')
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const cors = require('cors')
+
 
 const port = process.env.PORT
 
@@ -54,7 +55,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
 
-    await client.connect();
+    // await client.connect();
 
     //database creation
     const database = client.db('PIIRS')
@@ -286,6 +287,17 @@ async function run() {
         count: 0
       })
 
+      //create timeline
+      const timellineEntry = {
+        _id: result.insertedId,
+        citizen_id: user._id,
+        issueCreatorRole: user.role,
+        issueCreatedBy: user.name,
+        issueCreatedAt: data.createdAt
+      }
+
+      const timeline = await timelineCollection.insertOne(timellineEntry)
+      console.log(timeline)
       // Increment user's issue count
       await userCollection.updateOne(
         { _id: user._id },
