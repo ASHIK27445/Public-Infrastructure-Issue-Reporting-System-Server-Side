@@ -229,6 +229,14 @@ async function run() {
       res.send({hasUpvoted, count})
     })
 
+
+    //get timeline info
+    app.get('/timeline/:timelineId', async(req, res)=> {
+      const {timelineId} = req.params
+      const result = await timelineCollection.findOne({_id: new ObjectId(timelineId)})
+      res.send(result)
+    })
+
     //post method
 
     //User Registration
@@ -238,6 +246,7 @@ async function run() {
         userInfo.isPremium = false
         userInfo.isBlocked = false
         userInfo.issueCount = 0
+        userInfo.rejectedIssueCount = 0
         userInfo.createdAt = new Date()
         const result = await userCollection.insertOne(userInfo)
         res.send(result)
@@ -384,6 +393,24 @@ async function run() {
     }
 
     await userCollection.updateOne({_id: staff._id}, assignCount)
+
+    /**--------------------timeline updated changes--------------- */
+    await timelineCollection.updateOne(
+      {_id: new ObjectId(issueId)},
+      {
+        $push: {
+          changes: {
+            type: "assigned",
+            title: "Assigned to Department",
+            description: `Issue assigned to ${staff.dept} Department`,
+            role: 'admin',
+            updatedBy: adminUser.name,
+            assignTo: staff.name,
+            createdAt: new Date()
+          }
+        }
+      }
+    )
 
     // console.log(issueResult)
 
@@ -591,6 +618,12 @@ async function run() {
 
     const {issueId, reason} = req.body
 
+    /**--------------------Find Issue & Reporter---------------------- */
+    const issue = await issueCollection.findOne({ _id: new ObjectId(issueId) })
+    if (!issue) return res.status(404).send({ message: "Issue not found" })
+
+    const reporterId = issue.reportBy
+
     /**--------------------Update Issue Status---------------------- */
     const query = {_id: new ObjectId(issueId)}
     const update = {
@@ -603,6 +636,34 @@ async function run() {
     }
 
     const result = await issueCollection.updateOne(query, update)
+
+    /**----------------------Update Timeline---------------------- */
+    await timelineCollection.updateOne(
+      {_id: new ObjectId(issueId)},
+      {
+        $push: {
+          changes: {
+            type: 'rejected',
+            title: 'Issue Rejected',
+            description: reason,
+            role: 'admin',
+            updatedBy: adminUser.name,
+            createdAt: new Date()
+          }
+        }
+      }
+    )
+
+    /**--------------------Update Rejected Issue Count------------ */
+    await userCollection.updateOne(
+      {_id: new ObjectId(reporterId)},
+      {
+        $inc: {
+          rejectedIssueCount: 1
+        }
+      }
+    )
+
 
     res.send(result)
 
