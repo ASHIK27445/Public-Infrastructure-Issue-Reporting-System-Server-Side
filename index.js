@@ -115,7 +115,7 @@ async function run() {
 
     })
 
-    app.get('/detailIssues/:id', verifyFBToken, async(req, res)=>{
+    app.get('/detailIssues/:id', async(req, res)=>{
       const {id} = req.params
       const result = await issueCollection.aggregate([
           {
@@ -217,7 +217,7 @@ async function run() {
     })
 
     //get upvote info
-    app.get('/upvote-info/:issueId', verifyFBToken, async(req, res)=> {
+    app.get('/upvote-info/:issueId', async(req, res)=> {
       const {issueId} = req.params
       const userEmail = req.decoded_email
       const user = await userCollection.findOne({email: userEmail})
@@ -600,6 +600,24 @@ async function run() {
           { _id: new ObjectId(id) },
           { $set: filteredUpdate }
         );
+
+
+        //update timeline
+        await timelineCollection.updateOne(
+          {_id: new ObjectId(id)},
+          {
+            $push:{
+              changes: {
+                type: "issue-updated",
+                title: "Issue Updated",
+                description: "Issue details updated by reporter",
+                role: "citizen",
+                updatedBy: user.name,
+                createdAt: new Date()
+              }
+            }
+          }
+        )
 
         res.send(result);
       } catch (error) {
