@@ -732,6 +732,23 @@ async function run() {
         { $set: updateData }
       )
 
+      /**--------------------Added Timeline----------------- */
+      await timelineCollection.updateOne(
+        {_id: new ObjectId(issueId)},
+        {
+          $push: {
+            changes: {
+              type: newStatus,
+              title: "Status Updated",
+              description: closeReason || `Issue marked as ${newStatus}`,
+              role: 'staff',
+              updatedBy: issue.assignedStaff.name,
+              createdAt: new Date()
+            }
+          }
+        }
+      )
+
       res.send(result)
 
     })
