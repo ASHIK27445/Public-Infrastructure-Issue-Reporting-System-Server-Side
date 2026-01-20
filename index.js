@@ -133,8 +133,9 @@ async function run() {
               $addFields: {
                 reporterName: { $arrayElemAt: ['$reporterInfo.name', 0]},
                 reporterPhoto: {$arrayElemAt: ['$reporterInfo.photoURL', 0]},
-                reporterJoined:{$arrayElemAt:['$reporterInfo.createdAt', 0]}
-
+                reporterJoined:{$arrayElemAt:['$reporterInfo.createdAt', 0]},
+                reporterIssueCount: {$arrayElemAt: ['$reporterInfo.issueCount', 0]},
+                reportRejectedIssueCount: {$arrayElemAt: ['$reporterInfo.rejectedIssueCount', 0]}
               }
           },
           {
