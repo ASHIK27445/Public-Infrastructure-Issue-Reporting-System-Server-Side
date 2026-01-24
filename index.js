@@ -2,7 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors')
-
+const stripe = require('stripe')(process.env.stripe_secretKey)
 
 const port = process.env.PORT
 
@@ -502,6 +502,62 @@ async function run() {
         });
     })
 
+    //payment checkout
+    app.post('/create-checkout-session', verifyFBToken, async(req, res)=> {
+      const userEmail = req.decoded_email
+      const amount = 1000
+
+      /**------------------checking user------------------------------*/
+      const user = await userCollection.findOne({email: userEmail})
+      if(!user){
+        return res.status(404).json({success: false, message: 'User not found!'})
+      }
+
+      if (user.isPremium) {
+        return res.status(400).json({ success: false, message: 'User is already premium' });
+      }
+
+      if (user.isBlocked) {
+        return res.status(403).json({ success: false, message: 'Blocked users cannot subscribe' });
+      }
+
+      const userId = user?._id.toString()
+
+      /**------------------Stripe Session -------------------------- */
+      const session = await stripe.checkout.sessions.create({
+        customer_email: userEmail,
+        client_reference_id: userId,
+        line_items: [
+        {
+          price_data: {
+            currency: 'bdt',
+            product_data: {
+              name: 'PIIRS Premium Subscription',
+              description: 'Unlimited issue submissions and priority support',
+            },
+            unit_amount: amount * 100,
+          },
+          quantity: 1,
+        },
+        ],
+        mode: 'payment',
+        success_url: `${process.env.FRONTEND_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL}/my-profile`,
+        metadata: {
+          userId: userId,
+          userEmail: userEmail,
+          amount: amount
+        }
+      })
+
+      res.status(200).json({
+        success: true,
+        sessionId: session.id, 
+        sessionURL: session.url
+      })
+
+    })
+
     //---------------------------------------------------------------------//
     //put/update method
     //---------------------------------------------------------------------//
@@ -803,57 +859,57 @@ async function run() {
     });
 
     // SUBSCRIBE: Make user premium
-    app.post('/user/subscribe', verifyFBToken, async(req, res) => {
-      try {
-        const email = req.decoded_email;
-        const { amount, userId } = req.body;
+    // app.post('/user/subscribe', verifyFBToken, async(req, res) => {
+    //   try {
+    //     const email = req.decoded_email;
+    //     const { amount, userId } = req.body;
 
-        // Find user
-        const user = await userCollection.findOne({ email });
-        if (!user) {
-          return res.status(404).send({ message: 'User not found' });
-        }
+    //     // Find user
+    //     const user = await userCollection.findOne({ email });
+    //     if (!user) {
+    //       return res.status(404).send({ message: 'User not found' });
+    //     }
 
-        // Check if already premium
-        if (user.isPremium) {
-          return res.status(400).send({ message: 'User is already premium' });
-        }
+    //     // Check if already premium
+    //     if (user.isPremium) {
+    //       return res.status(400).send({ message: 'User is already premium' });
+    //     }
 
-        // Check if blocked
-        if (user.isBlocked) {
-          return res.status(403).send({ message: 'Blocked users cannot subscribe' });
-        }
+    //     // Check if blocked
+    //     if (user.isBlocked) {
+    //       return res.status(403).send({ message: 'Blocked users cannot subscribe' });
+    //     }
 
-        // In production, integrate with payment gateway here
-        // For now, we'll just update the user status
+    //     // In production, integrate with payment gateway here
+    //     // For now, we'll just update the user status
         
-        // Verify payment amount
-        if (amount !== 1000) {
-          return res.status(400).send({ message: 'Invalid payment amount' });
-        }
+    //     // Verify payment amount
+    //     if (amount !== 1000) {
+    //       return res.status(400).send({ message: 'Invalid payment amount' });
+    //     }
 
-        // Update user to premium
-        const result = await userCollection.updateOne(
-          { email },
-          { 
-            $set: { 
-              isPremium: true,
-              subscribedAt: new Date(),
-              updatedAt: new Date()
-            } 
-          }
-        );
+    //     // Update user to premium
+    //     const result = await userCollection.updateOne(
+    //       { email },
+    //       { 
+    //         $set: { 
+    //           isPremium: true,
+    //           subscribedAt: new Date(),
+    //           updatedAt: new Date()
+    //         } 
+    //       }
+    //     );
 
-        res.send({ 
-          success: true, 
-          message: 'Successfully subscribed to premium!',
-          data: result
-        });
-      } catch (error) {
-        console.error('Error subscribing:', error);
-        res.status(500).send({ message: 'Subscription failed' });
-      }
-    });
+    //     res.send({ 
+    //       success: true, 
+    //       message: 'Successfully subscribed to premium!',
+    //       data: result
+    //     });
+    //   } catch (error) {
+    //     console.error('Error subscribing:', error);
+    //     res.status(500).send({ message: 'Subscription failed' });
+    //   }
+    // });
 
     //------------------------------------------------------------------------------------//
     //delete method
