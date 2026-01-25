@@ -532,6 +532,13 @@ async function run() {
       res.json(responseData);
     })
 
+    //payment history(user)
+    app.get('/user-payment-history/:userId', verifyFBToken, async(req, res)=> {
+      const {userId} = req.params
+      const query = {userId: new ObjectId(userId)}
+      const result = await paymentCollection.find(query).toArray()
+      res.send(result)
+    })
     //post method
 
     //User Registration
