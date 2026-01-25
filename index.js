@@ -63,6 +63,7 @@ async function run() {
     const issueCollection = database.collection('issue')
     const upvoteCollection = database.collection('upvote')
     const timelineCollection = database.collection('timeline')
+    const paymentCollection = database.collection('payment')
     
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -236,6 +237,124 @@ async function run() {
       const {timelineId} = req.params
       const result = await timelineCollection.findOne({_id: new ObjectId(timelineId)})
       res.send(result)
+    })
+
+    //verify payment
+    app.get('/verify-payment/:sessionId', verifyFBToken, async(req, res) => {
+      const {sessionId} = req.params;
+
+      /**------------------------Retrieve Session------------------------- */
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      
+      // console.log('🔍 Stripe Session Data:', {
+      //   sessionId: session.id,
+      //   payment_status: session.payment_status,
+      //   client_reference_id: session.client_reference_id,
+      //   customer_email: session.customer_email,
+      //   amount_total: session.amount_total,
+      //   metadata: session.metadata
+      // })
+
+      if (session.payment_status !== 'paid') {
+        return res.json({ 
+          success: false, 
+          paid: false, 
+          message: 'Payment not completed',
+          payment_status: session.payment_status
+        });
+      }
+
+      /**-------------------------User Verification---------------------- */
+      const userId = session.client_reference_id
+
+      const user = await userCollection.findOne({_id: new ObjectId(userId)});
+
+      if (!user) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'User not found',
+          userId: userId 
+        });
+      }
+
+
+      //Check if already premium (prevent duplicate update)
+      if (user.isPremium) {
+        return res.json({
+          success: true,
+          paid: true,
+          alreadyPremium: true,
+          message: 'User is already premium',
+          user: {
+            id: user._id,
+            email: user.email,
+            name: user.name,
+            isPremium: user.isPremium
+          }
+        })
+      }
+
+      /**----------------------------Update User Collection--------------------- */
+      const result = await userCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { 
+          $set: { 
+            isPremium: true,
+            subscribedAt: new Date(),
+            subscriptionAmount: parseInt(session.amount_total / 100),
+            subscriptionType: session.metadata?.type || 'premium',
+            stripeSessionId: sessionId,
+            updatedAt: new Date()
+          } 
+        }
+      );
+
+
+      /**--------------------------Insert in payment collection-------------------- */
+      await paymentCollection.insertOne({
+        _id: new ObjectId(),
+        userId: new ObjectId(userId),
+        actionType: `${session.metadata?.type}`,
+        title: `${session.metadata?.type} Subscription Activated`,
+        description: `Purchased ${session.metadata?.type || 'premium'} subscription for ${session.amount_total / 100} BDT`,
+        performedBy: {
+          userId: new ObjectId(userId),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          photoURL: user.photoURL
+        },
+        data: {
+          currency: 'BDT',
+          amount: parseInt(session.amount_total / 100),
+          type: session.metadata?.type || 'premium',
+          stripeSessionId: sessionId,
+          customerEmail: session.customer_email
+        },
+        paymentAt: new Date()
+      })
+
+      return res.json({
+        success: true,
+        paid: true,
+        message: 'Payment verified and user upgraded to premium',
+        session: {
+          id: session.id,
+          payment_status: session.payment_status,
+          amount: session.amount_total / 100,
+          type: session.metadata?.type || 'premium'
+        },
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          isPremium: true
+        },
+        database: {
+          updated: result.modifiedCount > 0,
+          matched: result.matchedCount > 0
+        }
+      })
     })
 
     //post method
@@ -505,7 +624,13 @@ async function run() {
     //payment checkout
     app.post('/create-checkout-session', verifyFBToken, async(req, res)=> {
       const userEmail = req.decoded_email
-      const amount = 1000
+      const {type} = req.body
+      let amount
+      if(type === 'basic'){
+        amount = 500
+      }else if(type === 'premium'){
+        amount = 1000
+      }
 
       /**------------------checking user------------------------------*/
       const user = await userCollection.findOne({email: userEmail})
@@ -546,7 +671,8 @@ async function run() {
         metadata: {
           userId: userId,
           userEmail: userEmail,
-          amount: amount
+          amount: amount,
+          type: type
         }
       })
 
