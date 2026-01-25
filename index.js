@@ -70,7 +70,7 @@ async function run() {
         const {email} = req.params
         const query = {email:email}
         const result = await userCollection.findOne(query)
-        console.log(result)
+        // console.log(result)
         res.send(result)
     })
 
@@ -220,12 +220,12 @@ async function run() {
     //get upvote info
     app.get('/upvote-info/:issueId', async(req, res)=> {
       const {issueId} = req.params
-      const userEmail = req.decoded_email
-      const user = await userCollection.findOne({email: userEmail})
+      const {userId} = req.query
       const query = {_id: new ObjectId(issueId)}
       const result = await upvoteCollection.findOne(query)
 
-      const hasUpvoted = result?.upvoteUsers?.[user?._id.toString()] || false
+      const hasUpvoted = userId ?  result?.upvoteUsers?.[userId] : false
+      
       const count = result?.count
 
       res.send({hasUpvoted, count})
@@ -239,7 +239,7 @@ async function run() {
       res.send(result)
     })
 
-    //verify payment
+    //verify subscription payment
     app.get('/verify-payment/:sessionId', verifyFBToken, async(req, res) => {
       const {sessionId} = req.params;
 
@@ -355,6 +355,181 @@ async function run() {
           matched: result.matchedCount > 0
         }
       })
+    })
+
+    //verify boost payment
+    app.get('/verify-boost-payment/:sessionId', verifyFBToken, async(req, res) => {
+      const {sessionId} = req.params;
+
+      /**------------------------Retrieve Session------------------------- */
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      
+      console.log('🔍 Boost Session Data:', {
+        sessionId: session.id,
+        payment_status: session.payment_status,
+        metadata: session.metadata
+      });
+
+      if (session.payment_status !== 'paid') {
+        console.log('❌ Boost payment not completed:', session.payment_status);
+        return res.json({ 
+          success: false, 
+          paid: false, 
+          message: 'Payment not completed',
+          payment_status: session.payment_status
+        });
+      }
+
+      const metadata = session.metadata;
+      const userId = session.client_reference_id
+      const issueId = metadata.issueId;
+      const amount = session.amount_total;
+      const boostType = metadata.type;
+
+      /**-------------------------User Verification---------------------- */
+      const user = await userCollection.findOne({_id: new ObjectId(userId)});
+
+      if (!user) {
+        console.log('❌ User not found for boost payment');
+        return res.status(404).json({ 
+          success: false, 
+          message: 'User not found'
+        });
+      }
+
+      /**-------------------------Issue Verification---------------------- */
+      let issue = null;
+      if (issueId) {
+        issue = await issueCollection.findOne({_id: new ObjectId(issueId)});
+        
+        if (!issue) {
+          console.log('❌ Issue not found for boost');
+          return res.status(404).json({ 
+            success: false, 
+            message: 'Issue not found'
+          });
+        }
+      }
+
+      console.log('✅ All verifications passed for boost payment');
+
+      // Check if boost already exists for this issue
+      const existingPayment = await paymentCollection.findOne({
+        'data.stripeSessionId': sessionId,
+        actionType: { $regex: /boost/i }
+      });
+
+      if (existingPayment) {
+        console.log('ℹ️ Boost payment already recorded for this session');
+        return res.json({
+          success: true,
+          paid: true,
+          alreadyProcessed: true,
+          message: 'Boost already processed',
+          amount: amount,
+          type: boostType,
+          issue: issue
+        });
+      }
+
+      /**-------------------------Update Issue Priority---------------------- */
+      
+      if (issueId && issue) {
+        // Update issue priority to "High"
+        await issueCollection.updateOne(
+          { _id: new ObjectId(issueId) },
+          { 
+            $set: { 
+              priority: 'High',
+              isBoosted: true,
+              boostedAt: new Date(),
+              boostedBy: user._id,
+              boostType: boostType,
+              boostAmount: amount
+            },
+            $inc: { boostCount: 1 }
+          }
+        );
+
+        console.log('✅ Issue priority updated to High');
+      }
+
+      /**-------------------------Create Timeline Entry---------------------- */
+      await timelineCollection.updateOne(
+        {_id: new ObjectId(issueId)},
+        {
+          $push: {
+            changes: {
+              type: "boost",
+              title: "Boosted Priority",
+              description: `Issue is boosted on High Priority`,
+              role: user?.role,
+              updatedBy: user?.name,
+              createdAt: new Date()
+            }
+          }
+        }
+      )
+
+      console.log('✅ Timeline entry created for boost');
+
+      /**-------------------------Create Payment Record---------------------- */
+      await paymentCollection.insertOne({
+        _id: new ObjectId(),
+        userId: new ObjectId(userId),
+        actionType: `${session.metadata?.type}`,
+        title: `${session.metadata?.type} Priority Activated`,
+        description: `Purchased ${session.metadata?.type} priority for ${session.amount_total / 100} BDT`,
+        performedBy: {
+          userId: new ObjectId(userId),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          photoURL: user.photoURL
+        },
+        data: {
+          currency: 'BDT',
+          amount: parseInt(session.amount_total / 100),
+          type: session.metadata?.type || 'premium',
+          stripeSessionId: sessionId,
+          customerEmail: session.customer_email
+        },
+        paymentAt: new Date()
+      })
+      console.log('✅ Payment record saved');
+
+      /**-------------------------Send Response---------------------- */
+      const responseData = {
+        success: true,
+        paid: true,
+        message: 'Payment verified and issue boosted successfully',
+        amount: amount,
+        type: boostType,
+        sessionId: sessionId,
+        session: {
+          id: session.id,
+          payment_status: session.payment_status,
+          amount: amount
+        },
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name
+        }
+      };
+
+      // Add issue details if available
+      if (issue) {
+        responseData.issue = {
+          _id: issue._id,
+          title: issue.title,
+          priority: 'High', // Updated priority
+          status: issue.status,
+          isBoosted: true
+        };
+      }
+
+      res.json(responseData);
     })
 
     //post method
@@ -624,12 +799,28 @@ async function run() {
     //payment checkout
     app.post('/create-checkout-session', verifyFBToken, async(req, res)=> {
       const userEmail = req.decoded_email
-      const {type} = req.body
+      const {type, issueId} = req.body
+
       let amount
+      let productName
+      let description
+      let success_url
+
       if(type === 'basic'){
         amount = 500
+        productName = 'Basic Subscription';
+        description = 'Basic access with limited features'
+        success_url = `${process.env.FRONTEND_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`
       }else if(type === 'premium'){
         amount = 1000
+        productName = 'Premium Subscription';
+        description = 'Unlimited issue submissions and priority support'
+        success_url = `${process.env.FRONTEND_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`
+      }else if(type === 'normal_boost'){
+        amount = 100
+        productName = 'Issue Boost';
+        description = 'Boost this issue for higher priority';
+        success_url = `${process.env.FRONTEND_URL}/payment-boost-success?session_id={CHECKOUT_SESSION_ID}`
       }
 
       /**------------------checking user------------------------------*/
@@ -638,7 +829,7 @@ async function run() {
         return res.status(404).json({success: false, message: 'User not found!'})
       }
 
-      if (user.isPremium) {
+      if (user.isPremium && type !== 'normal_boost') {
         return res.status(400).json({ success: false, message: 'User is already premium' });
       }
 
@@ -647,6 +838,25 @@ async function run() {
       }
 
       const userId = user?._id.toString()
+
+      /**-----------------Conditional metadata--------------------- */
+      let metadata
+      if(type === 'normal_boost'){
+        metadata = {
+          userId: userId,
+          userEmail: userEmail,
+          amount: amount,
+          type: type,
+          issueId: issueId
+        }
+      }else{
+        metadata = {
+          userId: userId,
+          userEmail: userEmail,
+          amount: amount,
+          type: type
+        }
+      }
 
       /**------------------Stripe Session -------------------------- */
       const session = await stripe.checkout.sessions.create({
@@ -657,8 +867,8 @@ async function run() {
           price_data: {
             currency: 'bdt',
             product_data: {
-              name: 'PIIRS Premium Subscription',
-              description: 'Unlimited issue submissions and priority support',
+              name: productName,
+              description: description,
             },
             unit_amount: amount * 100,
           },
@@ -666,14 +876,9 @@ async function run() {
         },
         ],
         mode: 'payment',
-        success_url: `${process.env.FRONTEND_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: success_url,
         cancel_url: `${process.env.FRONTEND_URL}/dashboard/payment-cancel`,
-        metadata: {
-          userId: userId,
-          userEmail: userEmail,
-          amount: amount,
-          type: type
-        }
+        metadata: metadata
       })
 
       res.status(200).json({
