@@ -667,7 +667,7 @@ async function run() {
         ],
         mode: 'payment',
         success_url: `${process.env.FRONTEND_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.FRONTEND_URL}/my-profile`,
+        cancel_url: `${process.env.FRONTEND_URL}/dashboard/payment-cancel`,
         metadata: {
           userId: userId,
           userEmail: userEmail,
