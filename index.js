@@ -547,6 +547,12 @@ async function run() {
       res.send(result)
     })
 
+    //get all upvotes
+    app.get('/all-upvotes', async(req, res)=> {
+      const result = await upvoteCollection.find().toArray()
+      res.send(result)
+    })
+
     //post method
 
     //User Registration
@@ -772,6 +778,13 @@ async function run() {
               $set: {updatedAt: new Date()}
             }
           )
+        
+          await issueCollection.updateOne(
+            {_id: new ObjectId(issueId)},
+            {
+              $inc: {upvoteCount: -1}
+            }
+          )
 
         //updated upvote from database
         const updateUpvote = await upvoteCollection.findOne({_id: new ObjectId(issueId)})
@@ -798,6 +811,13 @@ async function run() {
           },
           {upsert: true}
         )//doesn't neceesary to use upsert here;
+
+        await issueCollection.updateOne(
+          {_id: new ObjectId(issueId)},
+          {
+            $inc: {upvoteCount: 1}
+          }
+        )
 
         const updateUpvote = await upvoteCollection.findOne({ 
             _id: new ObjectId(issueId) 
