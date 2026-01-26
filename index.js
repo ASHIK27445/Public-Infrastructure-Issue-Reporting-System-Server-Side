@@ -924,6 +924,8 @@ async function run() {
 
     })
 
+
+
     //---------------------------------------------------------------------//
     //put/update method
     //---------------------------------------------------------------------//
@@ -1361,9 +1363,19 @@ async function run() {
       }
     });
 
+    //router
+    //view count(just demo now)
+    //View Count Route
+    app.post('/view-count/:issueId', async (req, res) => {
+      const result = await issueCollection.findOneAndUpdate(
+          { _id: new ObjectId(req.params.issueId) },
+          { $inc: { viewsCount: 1 } },
+          { returnDocument: 'after' }
+        )
+        // console.log(result)
+        res.json({ success: true, viewsCount: result.viewsCount});
+    });
     
-
-
     // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
