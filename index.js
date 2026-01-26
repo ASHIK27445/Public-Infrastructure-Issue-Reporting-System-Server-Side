@@ -539,6 +539,14 @@ async function run() {
       const result = await paymentCollection.find(query).toArray()
       res.send(result)
     })
+
+    //payment details
+    app.get('/payment-details/:paymentId', verifyFBToken, async(req, res)=> {
+      const {paymentId} = req.params
+      const result = await paymentCollection.findOne({_id: new ObjectId(paymentId)})
+      res.send(result)
+    })
+
     //post method
 
     //User Registration
