@@ -84,7 +84,10 @@ async function run() {
     app.get('/allissues', async(req, res)=>{
       // const result = await issueCollection.find().toArray()
       // res.send(result)
-      //better approach
+      //better approach with paginatgion
+      const page = parseInt(req.query.page) || 1
+      const limit = parseInt(req.query.limit) || 8
+      const skip = (page - 1) * limit
       const result = await issueCollection.aggregate([
         {
           $lookup: {
@@ -109,6 +112,12 @@ async function run() {
           $project:{
             reporterInfo : 0 //hide original array sothat i can fetch only two item
           }
+        },
+        {
+          $skip: skip
+        },
+        {
+          $limit: limit
         }
       ]).toArray()
 
