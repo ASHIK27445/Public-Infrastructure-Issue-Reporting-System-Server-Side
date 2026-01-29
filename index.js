@@ -562,6 +562,22 @@ async function run() {
       res.send(result)
     })
 
+    //get all reviewd issue for super staff
+    app.get('/review-issues', verifyFBToken, async(req, res)=>{
+      const email = req.decoded_email
+
+      const user = await userCollection.findOne({email})
+      if (!user && user.position === 'super') {
+          return res.status(401).send({ message: 'Super Staffnot found' });
+      }
+
+      
+      const result = await issueCollection.find({isReviewed: false}).toArray()
+
+      res.send(result)
+
+    })
+
     //post method
 
     //User Registration
@@ -607,6 +623,7 @@ async function run() {
       data.upvotes = []
       data.upvoteCount = 0
       data.assignInto = null
+      data.isReviewed = false
       data.createdAt = new Date()
       
       console.log(data)
