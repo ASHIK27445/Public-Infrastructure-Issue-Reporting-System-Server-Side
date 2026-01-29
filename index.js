@@ -38,9 +38,6 @@ const verifyFBToken = async (req, res, next) => {
 }
 
 
-
-
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.md2layq.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -89,6 +86,11 @@ async function run() {
       const limit = parseInt(req.query.limit) || 8
       const skip = (page - 1) * limit
       const result = await issueCollection.aggregate([
+        {
+          $match: {
+            isReviewed: true
+          }
+        },
         {
           $lookup: {
             from: 'user',  //from which collection i want to lookup
