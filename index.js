@@ -572,7 +572,7 @@ async function run() {
       }
 
       
-      const result = await issueCollection.find({isReviewed: false}).toArray()
+      const result = await issueCollection.find().toArray()
 
       res.send(result)
 
@@ -1250,7 +1250,22 @@ async function run() {
         console.error('Error updating profile:', error);
         res.status(500).send({ message: 'Failed to update profile' });
       }
-    });
+    })
+
+    // is review update
+    app.patch('/update-review/:id', verifyFBToken, async(req, res)=>{
+      const {id} = req.params
+      const {isReviewed} = req.body
+
+      const query = {_id: new ObjectId(id)}
+      const update = {
+        $set: {
+          isReviewed
+        }
+      }
+      const result = await issueCollection.updateOne(query, update)
+      res.send(result)
+    })
 
     // SUBSCRIBE: Make user premium
     // app.post('/user/subscribe', verifyFBToken, async(req, res) => {
