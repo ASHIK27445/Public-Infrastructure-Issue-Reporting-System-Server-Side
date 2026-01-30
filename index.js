@@ -61,6 +61,7 @@ async function run() {
     const upvoteCollection = database.collection('upvote')
     const timelineCollection = database.collection('timeline')
     const paymentCollection = database.collection('payment')
+    const reportCollection = database.collection('report')
     
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -992,6 +993,73 @@ async function run() {
         sessionURL: session.url
       })
 
+    })
+
+    //report issue
+    app.post('/report-issue/:id', verifyFBToken, async(req, res)=> {
+      const {id} = req.params
+
+      if(!id){
+        return res.status(400).json({message: "Invalid Id"})
+      }
+
+      const  {
+      reportType,
+      reportDetails,
+      isAnonymous,
+      reporterId,
+      reporterName
+      } = req.body
+
+      /*---------------------Chech User already Report the Issue------- */
+      const alreadyReported = await reportCollection.findOne({
+        _id: new ObjectId(id),
+        "reports.reporterId": reporterId
+      })
+
+      if (alreadyReported) {
+        return res.send({error:true, message: "You Already Report this issue!"})
+      }
+
+      const reportData = {
+        reportType,
+        reportDetails,
+        isAnonymous,
+        reporterId,
+        reporterName,
+        reportedAt: new Date()
+      }
+
+      console.log(reportData)
+
+      /*----------------------Find Issues--------------------------------*/
+      const issue = await issueCollection.findOne({_id: new ObjectId(id)})
+      if(!issue){
+       return res.status(400).json({message: "Issue not found!"})
+      }
+
+      /*----------------------Insert and Update Report--------------------*/
+      await reportCollection.updateOne(
+        {_id: new ObjectId(id)},
+        {$setOnInsert:{
+          _id: new ObjectId(id),
+          title: issue.title,
+          createdAt: issue.createdAt
+          },
+          $push:{
+          reports: reportData
+          }
+        },
+        {upsert: true}
+      )
+
+      /*---------------------issue: report count------------------------*/
+      await issueCollection.updateOne(
+        {_id: new ObjectId(id)},
+        {$inc: {reportCount: 1}}
+      )
+
+      res.json({success: true})
     })
 
 
