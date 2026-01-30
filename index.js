@@ -578,7 +578,7 @@ async function run() {
       const limit = 8
       const skip = (page - 1) * limit
 
-      const {isReviewed, search} = req.query
+      const {isReviewed, search, month, year} = req.query
       const query = {}
 
       //filtering: query string came always as string
@@ -595,6 +595,23 @@ async function run() {
             description: {$regex: search, $options: 'i'}
           }
         ]
+      }
+
+      // Month and year filter
+      if (year) {
+          const yearNum = parseInt(year);
+
+          if (month !== undefined && month !== "") {
+            const monthNum = parseInt(month); 
+            const monthStart = new Date(yearNum, monthNum, 1, 0, 0, 0)
+            const monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59)
+            query.createdAt = { $gte: monthStart, $lte: monthEnd }
+          } else {
+            // full year
+            const yearStart = new Date(yearNum, 0, 1, 0, 0, 0)
+            const yearEnd = new Date(yearNum, 11, 31, 23, 59, 59)
+            query.createdAt = { $gte: yearStart, $lte: yearEnd }
+          }
       }
 
       const total = await issueCollection.countDocuments(query)
