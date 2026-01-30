@@ -569,14 +569,39 @@ async function run() {
       const email = req.decoded_email
 
       const user = await userCollection.findOne({email})
-      if (!user && user.position === 'super') {
+      if (!user || user.position !== 'super') {
           return res.status(401).send({ message: 'Super Staffnot found' });
       }
 
-      
-      const result = await issueCollection.find().toArray()
+      /**--------------------------Pagination--------------------------- */
+      const page = parseInt(req.query.page) || 1
+      const limit = 8
+      const skip = (page - 1) * limit
 
-      res.send(result)
+      const {isReviewed, search} = req.query
+      const query = {}
+
+      //filtering: query string came always as string
+      if (isReviewed === 'true') query.isReviewed = true
+      if (isReviewed === 'false') query.isReviewed = false
+
+      //search
+      if(search){
+        query.$or = [
+          {
+            title: {$regex: search, $options: 'i'}
+          },
+          {
+            description: {$regex: search, $options: 'i'}
+          }
+        ]
+      }
+
+      const total = await issueCollection.countDocuments(query)
+      
+      const result = await issueCollection.find(query).sort({createdAt: -1}).skip(skip).limit(limit).toArray()
+
+      res.send({total, result})
 
     })
 
