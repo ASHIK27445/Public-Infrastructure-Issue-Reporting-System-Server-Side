@@ -625,6 +625,7 @@ async function run() {
 
     //Dashoboard Stats
     //Utility function
+
     const getStartDate = (range) => {
       const now = new Date()
       
@@ -646,6 +647,22 @@ async function run() {
       }
     }
 
+    const getPreviousStartDate = (range) => {
+      const now = new Date()
+      switch (range) {
+        case '7d':
+          return new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) // 7d ago from current start
+        case '30d':
+          return new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000) // 30d ago
+        case '3m':
+          return new Date(new Date().setMonth(now.getMonth() - 6))
+        case '1y':
+          return new Date(new Date().setFullYear(now.getFullYear() - 2))
+        default:
+          return null
+      }
+    }
+
     //user stats
     app.get('/user/stats', verifyFBToken, async (req, res) => {
       const userEmail = req.decoded_email
@@ -659,8 +676,10 @@ async function run() {
       const { range } = req.query
 
       const startDate = getStartDate(range)
+      const prevStartDate = getPreviousStartDate(range)
       // console.log('Range:', range)
-      // console.log('Start Date:', startDate)
+      console.log('Start Date:', startDate)
+      console.log('previous date', prevStartDate)
       // console.log('Current Date:', new Date())
 
       const dateFilter = startDate
@@ -674,10 +693,39 @@ async function run() {
 
       const totalIssues = await issueCollection.countDocuments(issueFilter)
 
+      // Previous range filter
+      const prevFilter = { reportBy: user._id, 
+        ...(prevStartDate && 
+          { createdAt: { $gte: prevStartDate, $lt: startDate } }) }
+      const prevTotalIssues = await issueCollection.countDocuments(prevFilter)
+
+      // console.log(totalIssues, 'prev:', prevTotalIssues)
+      // Percentage change
+      let totalIssuesPercentage = 0
+      if (prevTotalIssues > 0) {
+        totalIssuesPercentage = Math.round(((totalIssues - prevTotalIssues) / prevTotalIssues) * 100)
+      } else if (totalIssues > 0) {
+        totalIssuesPercentage = 100 // Previous period zero, current > 0
+      }
+
       const pendingIssues = await issueCollection.countDocuments({
         ...issueFilter,
         status: 'Pending'
       })
+
+      const prevPendingIssues = await issueCollection.countDocuments({
+        ...prevFilter,
+        status: 'Pending'
+      })
+
+      // console.log(pendingIssues, "prev:",  prevPendingIssues)
+      // Pending issues percentage change
+      let pendingIssuesPercentage = 0
+      if (prevPendingIssues > 0) {
+        pendingIssuesPercentage = Math.round(((pendingIssues - prevPendingIssues) / prevPendingIssues) * 100)
+      } else if (pendingIssues > 0) {
+        pendingIssuesPercentage = 100
+      }
 
       const inProgressIssues = await issueCollection.countDocuments({
         ...issueFilter,
@@ -707,7 +755,7 @@ async function run() {
 
       const totalPayments = payments[0]?.total || 0
 
-      console.log(totalIssues, resolvedIssues)
+      // console.log(totalIssues, resolvedIssues)
 
       const successRate = totalIssues
         ? Math.round((resolvedIssues / totalIssues) * 100)
@@ -795,7 +843,9 @@ async function run() {
       res.send({
         range,
         totalIssues,
+        totalIssuesPercentage,
         pendingIssues,
+        pendingIssuesPercentage,
         inProgressIssues,
         resolvedIssues,
         totalPayments,
