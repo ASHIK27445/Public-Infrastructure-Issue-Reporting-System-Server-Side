@@ -62,6 +62,7 @@ async function run() {
     const timelineCollection = database.collection('timeline')
     const paymentCollection = database.collection('payment')
     const reportCollection = database.collection('report')
+    const commentCollection = database.collection('comment')
     
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -650,7 +651,6 @@ async function run() {
 
     //Dashoboard Stats
     //Utility function
-
     const getStartDate = (range) => {
       const now = new Date()
       
@@ -1020,6 +1020,224 @@ async function run() {
 
       res.send({result, dashboardQuickStats})
     })
+
+    // GET: Get all comments for an issue
+app.get('/comments/:issueId', async(req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    const comments = await commentCollection.find({
+      issueId: new ObjectId(issueId)
+    }).toArray();
+    
+    res.send(comments);
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).send({ message: 'Failed to fetch comments' });
+  }
+});
+
+// Toxicity check function
+async function checkToxicity(text) {
+  try {
+    // Simple keyword-based toxicity check
+    // You can replace this with TensorFlow later
+    
+    const toxicKeywords = [
+      // English
+      'idiot', 'stupid', 'moron', 'retard', 'dumb', 'fool',
+      'bastard', 'bitch', 'asshole', 'motherfucker',
+      'fuck', 'shit', 'damn', 'hell', 'crap',
+      'kill', 'die', 'hate', 'ugly', 'fat',
+      
+      // Bangla
+      'বোকা', 'গাধা', 'হাবা', 'পাগল', 'মূর্খ',
+      'নষ্ট', 'খারাপ', 'অপদার্থ'
+    ];
+
+    const lowerText = text.toLowerCase();
+    let score = 0;
+    let foundKeywords = 0;
+
+    toxicKeywords.forEach(keyword => {
+      if (lowerText.includes(keyword.toLowerCase())) {
+        foundKeywords++;
+        score += 0.15; // Each keyword adds 15% to score
+      }
+    });
+
+    // Cap score at 1
+    score = Math.min(score, 1);
+
+    // Additional checks for very toxic patterns
+    if (text.includes('kill you') || text.includes('die')) {
+      score = Math.max(score, 0.9);
+    }
+
+    return {
+      score: parseFloat(score.toFixed(2)),
+      isToxic: score >= 0.85,
+      foundKeywords
+    };
+
+  } catch (error) {
+    console.error('Error in toxicity check:', error);
+    return {
+      score: 0,
+      isToxic: false,
+      error: error.message
+    };
+  }
+}
+
+// POST: Add a new comment
+app.post('/comments/:issueId', verifyFBToken, async(req, res) => {
+  try {
+    const { issueId } = req.params;
+    const { commentText } = req.body;
+    const userEmail = req.decoded_email;
+
+    // Find user
+    const user = await userCollection.findOne({ email: userEmail });
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    // Find issue
+    const issue = await issueCollection.findOne({ 
+      _id: new ObjectId(issueId) 
+    });
+    if (!issue) {
+      return res.status(404).send({ message: 'Issue not found' });
+    }
+
+    // Check toxicity
+    const toxicityResult = await checkToxicity(commentText);
+    const isToxic = toxicityResult.score >= 0.85;
+
+    // Create comment
+    const commentData = {
+      _id: new ObjectId(),
+      issueId: new ObjectId(issueId),
+      commentby: user._id,
+      commenterName: user.name,
+      commenterRole: user.role,
+      commentText: isToxic ? '' : commentText, // Hide text if toxic
+      isToxic: isToxic,
+      toxicityScore: toxicityResult.score,
+      commentedAt: new Date(),
+      replies: []
+    };
+
+    // Insert comment
+    const result = await commentCollection.insertOne(commentData);
+
+    res.send({
+      success: true,
+      comment: commentData
+    });
+
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).send({ message: 'Failed to add comment' });
+  }
+});
+
+// POST: Add reply to a comment
+app.post('/comments/:commentId/reply', verifyFBToken, async(req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { replyText } = req.body;
+    const userEmail = req.decoded_email;
+
+    // Find user
+    const user = await userCollection.findOne({ email: userEmail });
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    // Find comment
+    const comment = await commentCollection.findOne({ 
+      _id: new ObjectId(commentId) 
+    });
+    if (!comment) {
+      return res.status(404).send({ message: 'Comment not found' });
+    }
+
+    // Check toxicity
+    const toxicityResult = await checkToxicity(replyText);
+    const isToxic = toxicityResult.score >= 0.85;
+
+    // Create reply
+    const replyData = {
+      repliesBy: user._id,
+      replierName: user.name,
+      replierRole: user.role,
+      repliedText: isToxic ? '' : replyText, // Hide text if toxic
+      isToxic: isToxic,
+      toxicityScore: toxicityResult.score,
+      repliedAt: new Date()
+    };
+
+    // Add reply to comment
+    const result = await commentCollection.updateOne(
+      { _id: new ObjectId(commentId) },
+      { $push: { replies: replyData } }
+    );
+
+    res.send({
+      success: true,
+      reply: replyData
+    });
+
+  } catch (error) {
+    console.error('Error adding reply:', error);
+    res.status(500).send({ message: 'Failed to add reply' });
+  }
+});
+
+// DELETE: Delete a comment (only by comment owner or admin)
+app.delete('/comments/:commentId', verifyFBToken, async(req, res) => {
+  try {
+    const { commentId } = req.params;
+    const userEmail = req.decoded_email;
+
+    // Find user
+    const user = await userCollection.findOne({ email: userEmail });
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    // Find comment
+    const comment = await commentCollection.findOne({ 
+      _id: new ObjectId(commentId) 
+    });
+    if (!comment) {
+      return res.status(404).send({ message: 'Comment not found' });
+    }
+
+    // Check permission (owner or admin)
+    const isOwner = comment.commentby.toString() === user._id.toString();
+    const isAdmin = user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).send({ message: 'Not authorized to delete this comment' });
+    }
+
+    // Delete comment
+    const result = await commentCollection.deleteOne({ 
+      _id: new ObjectId(commentId) 
+    });
+
+    res.send({ success: true });
+
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).send({ message: 'Failed to delete comment' });
+  }
+});
+
+
     //post method
 
     //User Registration
