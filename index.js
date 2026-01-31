@@ -623,6 +623,250 @@ async function run() {
 
     })
 
+    //Dashoboard Stats
+    //Utility function
+    const getStartDate = (range) => {
+      const now = new Date()
+      
+      switch (range) {
+        case '7d':
+          return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          
+        case '30d':
+          return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          
+        case '3m':
+          return new Date(new Date().setMonth(now.getMonth() - 3))
+          
+        case '1y':
+          return new Date(new Date().setFullYear(now.getFullYear() - 1))
+          
+        default:
+          return null
+      }
+    }
+
+    //user stats
+    app.get('/user/stats', verifyFBToken, async (req, res) => {
+      const userEmail = req.decoded_email
+
+      const user = await userCollection.findOne({email: userEmail})
+
+      if(!user){
+        return res.json({error: true, message: 'User not found!'})
+      }
+
+      const { range } = req.query
+
+      const startDate = getStartDate(range)
+      // console.log('Range:', range)
+      // console.log('Start Date:', startDate)
+      // console.log('Current Date:', new Date())
+
+      const dateFilter = startDate
+        ? { createdAt: { $gte: startDate } }
+        : {}
+
+      const issueFilter = {
+        reportBy: user._id,
+        ...dateFilter
+      }
+
+      const totalIssues = await issueCollection.countDocuments(issueFilter)
+
+      const pendingIssues = await issueCollection.countDocuments({
+        ...issueFilter,
+        status: 'Pending'
+      })
+
+      const inProgressIssues = await issueCollection.countDocuments({
+        ...issueFilter,
+        status: { $in: ['In-Progress', 'Working'] }
+      })
+
+      const resolvedIssues = await issueCollection.countDocuments({
+        ...issueFilter,
+        status: 'Resolved'
+      })
+
+      const payments = await paymentCollection.aggregate([
+        {
+          $match: {
+            userId: user._id,
+            ...(startDate && { paymentAt: { $gte: startDate } })
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$data.amount' }
+          }
+        }
+      ]).toArray()
+
+
+      const totalPayments = payments[0]?.total || 0
+
+      console.log(totalIssues, resolvedIssues)
+
+      const successRate = totalIssues
+        ? Math.round((resolvedIssues / totalIssues) * 100)
+        : 0
+
+      //category distribution
+      const categoryAggregation = await issueCollection.aggregate([
+        { $match: issueFilter },
+        {
+          $group: {
+            _id: '$category',        // Group by category
+            count: { $sum: 1 }       // Count issues per category
+          }
+        }
+      ]).toArray()
+
+      // Map to frontend format
+      const categoryDistribution = categoryAggregation.map(item => ({
+        name: item._id,
+        value: item.count,
+        color: (() => {
+          switch (item._id) {
+            case 'Road & Traffic': return '#10b981'
+            case 'Water Supply': return '#3b82f6'
+            case 'Electricity': return '#f59e0b'
+            case 'Sanitation': return '#8b5cf6'
+            case 'Streetlight': return '#facc15'
+            case 'Public Safety': return '#ef4444'
+            case 'Footpath': return '#6b2280'
+            default: return '#6b7280'
+          }
+        })()
+      }))
+
+      /*-------------------PriorityDistribution---------------------*/
+      const priorityAgg = await issueCollection.aggregate([
+        { $match: issueFilter },
+        {
+          $group: {
+            _id: '$priority',
+            count: { $sum: 1 }
+          }
+        }
+      ]).toArray()
+
+      // Transform to frontend format
+      const priorityDistribution = priorityAgg.map(item => ({
+        priority: item._id,
+        issues: item.count,
+        color: (()=>{
+          switch (item._id){
+            case 'Critical': return '#ef4444'
+            case 'High': return '#f97316'
+            case 'Normal': return '#10b981'
+            case 'Low': return '#3b82f6'
+            default: return '#6b7280'
+          }
+        })()
+      }))
+
+      const resolutionAgg = await issueCollection.aggregate([
+        { $match: issueFilter },
+        { 
+          $group: {
+            _id: '$category',
+            avgTime: { 
+              $avg: { 
+                $divide: [
+                  { $subtract: [ { $ifNull: ['$closedAt', new Date()] }, '$createdAt' ] },
+                  1000 * 60 * 60 * 24 // ms -> days
+                ]
+              }
+            }
+          }
+        },
+        { $sort: { avgTime: -1 } }
+      ]).toArray()
+
+      const resolutionTimeData = resolutionAgg.map(item => ({
+        category: item._id,
+        avgTime: item.avgTime ? Number(item.avgTime.toFixed(1)) : 0
+      }))
+
+      
+      res.send({
+        range,
+        totalIssues,
+        pendingIssues,
+        inProgressIssues,
+        resolvedIssues,
+        totalPayments,
+        successRate,
+        categoryDistribution,
+        priorityDistribution,
+        resolutionTimeData
+      })
+    })
+
+    //user issues over time
+    app.get('/user/issues-over-time', verifyFBToken, async (req, res) => {
+      const userEmail = req.decoded_email
+      const { range } = req.query
+
+      const user = await userCollection.findOne({ email: userEmail })
+      if (!user) {
+        return res.status(404).json({ error: true, message: 'User not found' })
+      }
+
+      const startDate = getStartDate(range)
+
+      const matchStage = {
+        reportBy: user._id,
+        ...(startDate && { createdAt: { $gte: startDate } })
+      }
+
+      const groupId =
+        range === '7d' || range === '30d'
+          ? {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' },
+              day: { $dayOfMonth: '$createdAt' }
+            }
+          : {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' }
+            }
+
+      const issuesOverTime = await issueCollection.aggregate([
+        { $match: matchStage },
+        {
+          $group: {
+            _id: groupId,
+            reported: { $sum: 1 },
+            resolved: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'Resolved'] }, 1, 0]
+              }
+            }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+      ]).toArray()
+
+      // format for frontend
+      const formatted = issuesOverTime.map(item => {
+        const { year, month, day } = item._id
+
+        return {
+          label: day
+            ? `${day}/${month}`
+            : new Date(year, month - 1).toLocaleString('en', { month: 'short' }),
+          reported: item.reported,
+          resolved: item.resolved
+        }
+      })
+
+      res.send(formatted)
+    })
+
     //post method
 
     //User Registration
