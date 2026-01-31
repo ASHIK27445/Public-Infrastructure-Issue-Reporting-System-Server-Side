@@ -4,11 +4,109 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors')
 const stripe = require('stripe')(process.env.stripe_secretKey)
 
+const http = require('http');
+const { Server } = require('socket.io');
 const port = process.env.PORT
 
 const app = express()
 app.use(cors())
+
+const corsOptions = {
+  origin: ['http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+};
+
+
+app.use(cors(corsOptions));
+
 app.use(express.json())
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
+});
+// 3. Socket.IO connection handling
+const issueRooms = {}; // Store active issue rooms
+
+io.on('connection', (socket) => {
+  console.log('🔌 New client connected:', socket.id);
+
+  // Join issue room
+  socket.on('join-issue', (issueId) => {
+    socket.join(`issue-${issueId}`);
+    console.log(`👥 Socket ${socket.id} joined issue-${issueId}`);
+    
+    // Track user in room
+    if (!issueRooms[issueId]) {
+      issueRooms[issueId] = new Set();
+    }
+    issueRooms[issueId].add(socket.id);
+  });
+
+  // Leave issue room
+  socket.on('leave-issue', (issueId) => {
+    socket.leave(`issue-${issueId}`);
+    if (issueRooms[issueId]) {
+      issueRooms[issueId].delete(socket.id);
+    }
+    console.log(`🚪 Socket ${socket.id} left issue-${issueId}`);
+  });
+
+  // Handle new comment
+  socket.on('new-comment', (data) => {
+    console.log('💬 New comment for issue:', data.issueId);
+    
+    // Broadcast to everyone in the issue room (except sender)
+    socket.to(`issue-${data.issueId}`).emit('new-comment-received', {
+      comment: data.comment,
+      issueId: data.issueId
+    });
+    
+    // Also send to sender for confirmation
+    socket.emit('comment-confirmed', {
+      message: 'Comment sent successfully',
+      comment: data.comment
+    });
+  });
+
+  // Handle new reply
+  socket.on('new-reply', (data) => {
+    console.log('💬 New reply for comment:', data.commentId);
+    
+    socket.to(`issue-${data.issueId}`).emit('new-reply-received', {
+      reply: data.reply,
+      commentId: data.commentId,
+      issueId: data.issueId
+    });
+  });
+
+  // Handle comment deletion
+  socket.on('delete-comment', (data) => {
+    socket.to(`issue-${data.issueId}`).emit('comment-deleted', {
+      commentId: data.commentId,
+      issueId: data.issueId
+    });
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    console.log('🔌 Client disconnected:', socket.id);
+    
+    // Clean up from all rooms
+    Object.keys(issueRooms).forEach(issueId => {
+      if (issueRooms[issueId].has(socket.id)) {
+        issueRooms[issueId].delete(socket.id);
+      }
+    });
+  });
+});
+
 
 const admin = require("firebase-admin")
 
@@ -1090,30 +1188,22 @@ async function checkToxicity(text) {
   }
 }
 
-// POST: Add a new comment
+// POST: Add a new comment - Fix event names
 app.post('/comments/:issueId', verifyFBToken, async(req, res) => {
   try {
     const { issueId } = req.params;
     const { commentText } = req.body;
     const userEmail = req.decoded_email;
 
-    // Find user
+    // Get user
     const user = await userCollection.findOne({ email: userEmail });
     if (!user) {
       return res.status(404).send({ message: 'User not found' });
     }
 
-    // Find issue
-    const issue = await issueCollection.findOne({ 
-      _id: new ObjectId(issueId) 
-    });
-    if (!issue) {
-      return res.status(404).send({ message: 'Issue not found' });
-    }
-
     // Check toxicity
     const toxicityResult = await checkToxicity(commentText);
-    const isToxic = toxicityResult.score >= 0.85;
+    const isToxic = toxicityResult.isToxic;
 
     // Create comment
     const commentData = {
@@ -1122,7 +1212,7 @@ app.post('/comments/:issueId', verifyFBToken, async(req, res) => {
       commentby: user._id,
       commenterName: user.name,
       commenterRole: user.role,
-      commentText: isToxic ? '' : commentText, // Hide text if toxic
+      commentText: isToxic ? '' : commentText,
       isToxic: isToxic,
       toxicityScore: toxicityResult.score,
       commentedAt: new Date(),
@@ -1131,6 +1221,15 @@ app.post('/comments/:issueId', verifyFBToken, async(req, res) => {
 
     // Insert comment
     const result = await commentCollection.insertOne(commentData);
+
+    // Broadcast via Socket.IO - Use consistent event names
+    io.to(`issue-${issueId}`).emit('new-comment-received', {
+      comment: commentData,
+      issueId: issueId,
+      type: 'new_comment'
+    });
+
+    console.log(`📢 Broadcasted new comment to issue-${issueId}`);
 
     res.send({
       success: true,
@@ -1143,51 +1242,63 @@ app.post('/comments/:issueId', verifyFBToken, async(req, res) => {
   }
 });
 
-// POST: Add reply to a comment
+// POST: Add a reply to a comment
 app.post('/comments/:commentId/reply', verifyFBToken, async(req, res) => {
   try {
     const { commentId } = req.params;
     const { replyText } = req.body;
     const userEmail = req.decoded_email;
 
-    // Find user
+    // Get user
     const user = await userCollection.findOne({ email: userEmail });
     if (!user) {
       return res.status(404).send({ message: 'User not found' });
     }
 
-    // Find comment
-    const comment = await commentCollection.findOne({ 
-      _id: new ObjectId(commentId) 
-    });
-    if (!comment) {
-      return res.status(404).send({ message: 'Comment not found' });
-    }
-
     // Check toxicity
     const toxicityResult = await checkToxicity(replyText);
-    const isToxic = toxicityResult.score >= 0.85;
+    const isToxic = toxicityResult.isToxic;
 
-    // Create reply
-    const replyData = {
-      repliesBy: user._id,
+    // Create reply object
+    const reply = {
+      _id: new ObjectId(),
+      repliedText: isToxic ? '' : replyText,
+      replierId: user._id,
       replierName: user.name,
       replierRole: user.role,
-      repliedText: isToxic ? '' : replyText, // Hide text if toxic
       isToxic: isToxic,
       toxicityScore: toxicityResult.score,
       repliedAt: new Date()
     };
 
-    // Add reply to comment
+    // Update comment with reply
     const result = await commentCollection.updateOne(
       { _id: new ObjectId(commentId) },
-      { $push: { replies: replyData } }
+      { $push: { replies: reply } }
     );
+
+    // Get the updated comment
+    const updatedComment = await commentCollection.findOne({ 
+      _id: new ObjectId(commentId) 
+    });
+
+    // Get issueId from comment
+    const comment = await commentCollection.findOne({ 
+      _id: new ObjectId(commentId) 
+    }, { projection: { issueId: 1 } });
+
+    // Broadcast reply via Socket.IO
+    if (comment && comment.issueId) {
+      io.to(`issue-${comment.issueId}`).emit('new-reply-received', {
+        reply: reply,
+        commentId: commentId,
+        issueId: comment.issueId
+      });
+    }
 
     res.send({
       success: true,
-      reply: replyData
+      reply: reply
     });
 
   } catch (error) {
@@ -1196,22 +1307,24 @@ app.post('/comments/:commentId/reply', verifyFBToken, async(req, res) => {
   }
 });
 
-// DELETE: Delete a comment (only by comment owner or admin)
+
+// DELETE: Delete a comment
 app.delete('/comments/:commentId', verifyFBToken, async(req, res) => {
   try {
     const { commentId } = req.params;
     const userEmail = req.decoded_email;
 
-    // Find user
+    // Get user
     const user = await userCollection.findOne({ email: userEmail });
     if (!user) {
       return res.status(404).send({ message: 'User not found' });
     }
 
-    // Find comment
+    // Get comment to check ownership and get issueId
     const comment = await commentCollection.findOne({ 
       _id: new ObjectId(commentId) 
     });
+
     if (!comment) {
       return res.status(404).send({ message: 'Comment not found' });
     }
@@ -1224,10 +1337,18 @@ app.delete('/comments/:commentId', verifyFBToken, async(req, res) => {
       return res.status(403).send({ message: 'Not authorized to delete this comment' });
     }
 
-    // Delete comment
+    // Delete the comment
     const result = await commentCollection.deleteOne({ 
       _id: new ObjectId(commentId) 
     });
+
+    // Broadcast deletion via Socket.IO
+    if (comment.issueId) {
+      io.to(`issue-${comment.issueId}`).emit('comment-deleted', {
+        commentId: commentId,
+        issueId: comment.issueId
+      });
+    }
 
     res.send({ success: true });
 
@@ -1236,7 +1357,6 @@ app.delete('/comments/:commentId', verifyFBToken, async(req, res) => {
     res.status(500).send({ message: 'Failed to delete comment' });
   }
 });
-
 
     //post method
 
@@ -2169,6 +2289,7 @@ app.get('/', (req, res)=>{
     res.send("Hello there!!!!")
 })
 
-app.listen(port, ()=>{
-    console.log(`App is running on the port ${port}`)
-})
+server.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+    console.log(`Socket.IO is ready for connections`);
+});
