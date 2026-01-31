@@ -867,6 +867,84 @@ async function run() {
       res.send(formatted)
     })
 
+    //user-dashboard recent issue
+    app.get('/user/dashboard/recent-issues', verifyFBToken, async(req,res)=>{
+      const userEmail = req.decoded_email
+      const user = await userCollection.findOne({email: userEmail})
+      if(!user){
+        return res.status(404).send({message: 'user not found!'})
+      }
+
+      const issueCount = user.issueCount
+      const resolvedCount = user.solvedIssue || 0
+      const rejectCount = user.rejectedIssueCount || 0
+
+      const query = {
+        reportBy: new ObjectId(user._id)
+      }
+
+      const result = await issueCollection.find(query).sort({createdAt: -1}).limit(5).toArray()
+
+      // get all user issues
+      const allIssues = await issueCollection
+        .find({ reportBy: user._id })
+        .toArray()
+
+      /* ---------- FASTEST RESOLUTION ---------- */
+      let smallestResolutionDay = null
+
+      const resolvedIssues = allIssues.filter(
+        issue => issue.status === 'Resolved' && issue.resolvedAt
+      )
+
+      if (resolvedIssues.length > 0) {
+        smallestResolutionDay = Math.min(
+          ...resolvedIssues.map(issue => {
+            const created = new Date(issue.createdAt)
+            const resolved = new Date(issue.resolvedAt)
+            return (resolved - created) / (1000 * 60 * 60 * 24)
+          })
+        )
+      }
+
+      /* ---------- AVERAGE RESOLUTION TIME ---------- */
+      let avgResolutionDay = 0
+
+      if (resolvedIssues.length > 0) {
+        const totalDays = resolvedIssues.reduce((sum, issue) => {
+          const created = new Date(issue.createdAt)
+          const resolved = new Date(issue.resolvedAt)
+          return sum + (resolved - created) / (1000 * 60 * 60 * 24)
+        }, 0)
+
+        avgResolutionDay = totalDays / resolvedIssues.length
+      }
+
+      /* ---------- MOST UPVOTES ---------- */
+      const mostUpvotes = allIssues.length
+        ? Math.max(...allIssues.map(issue => issue.upvoteCount || 0))
+        : 0
+
+      /* ---------- MOST VIEWS ---------- */
+      const mostViewsIssue = allIssues.length
+        ? Math.max(...allIssues.map(issue => issue.viewsCount || 0))
+        : 0
+
+      /* ---------- FINAL OBJECT ---------- */
+      const dashboardQuickStats = {
+        smallAvgResolutionDay: smallestResolutionDay
+          ? Number(smallestResolutionDay.toFixed(1))
+          : 0,
+        avgResolutionDay: avgResolutionDay ? Number(avgResolutionDay.toFixed(1)) : 0,
+        mostUpvotes,
+        mostViewsIssue,
+        issueCount,
+        resolvedCount,
+        rejectCount
+      }
+
+      res.send({result, dashboardQuickStats})
+    })
     //post method
 
     //User Registration
@@ -1530,6 +1608,17 @@ async function run() {
             assignIssued: -1,
             resolvedIssued: 1
           }})
+        }
+
+        if(issue.reportBy){
+          await userCollection.updateOne(
+            {_id: issue.reportBy},
+            {
+              $inc: {
+                solvedIssue: 1
+              }
+            }
+          )
         }
 
       }
