@@ -80,12 +80,10 @@ async function run() {
     })
 
     app.get('/allissues', async(req, res)=>{
-      // const result = await issueCollection.find().toArray()
-      // res.send(result)
-      //better approach with paginatgion
       const page = parseInt(req.query.page) || 1
       const limit = parseInt(req.query.limit) || 8
       const skip = (page - 1) * limit
+      
       const result = await issueCollection.aggregate([
         {
           $match: {
@@ -94,26 +92,54 @@ async function run() {
         },
         {
           $lookup: {
-            from: 'user',  //from which collection i want to lookup
-            localField: 'reportBy',   //which field to select
-            foreignField: '_id',       // field in user collection 
-            // and "Match issueCollection.reportBy with userCollection._id"
+            from: 'user',
+            localField: 'reportBy',
+            foreignField: '_id',
             as: 'reporterInfo'
           }
         },
         {
-            $addFields: {
-              reporterName: { $arrayElemAt: ['$reporterInfo.name', 0]},
-              reporterPhoto: {$arrayElemAt: ['$reporterInfo.photoURL', 0]}
-              //$arrayElemAt: [ <array>, <index> ]
-              // array → the array you want to get element from
-              // index → which element (starts from 0)
-              //Take the first element of the reporterInfo.name array
+          $addFields: {
+            reporterName: { $arrayElemAt: ['$reporterInfo.name', 0]},
+            reporterPhoto: {$arrayElemAt: ['$reporterInfo.photoURL', 0]},
+            priorityOrder: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$priority", "Critical"] }, then: 4 },
+                  { case: { $eq: ["$priority", "High"] }, then: 3 },
+                  { case: { $eq: ["$priority", "Normal"] }, then: 2 },
+                  { case: { $eq: ["$priority", "Low"] }, then: 1 }
+                ],
+                default: 0
+              }
+            },
+            statusOrder: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$status", "In-Progress"] }, then: 6 },
+                  { case: { $eq: ["$status", "Working"] }, then: 5 },
+                  { case: { $eq: ["$status", "Pending"] }, then: 4 },
+                  { case: { $eq: ["$status", "Resolved"] }, then: 3 },
+                  { case: { $eq: ["$status", "Closed"] }, then: 2 },
+                  { case: { $eq: ["$status", "Rejected"] }, then: 1 }
+                ],
+                default: 0
+              }
             }
+          }
         },
         {
-          $project:{
-            reporterInfo : 0 //hide original array sothat i can fetch only two item
+          $sort: { 
+            priorityOrder: -1,    // First: Priority (highest first)
+            statusOrder: -1,      // Second: Status (In-Progress > Working > Pending > etc.)
+            createdAt: -1         // Third: Newest first within same priority & status
+          }
+        },
+        {
+          $project: {
+            reporterInfo: 0,
+            priorityOrder: 0,
+            statusOrder: 0
           }
         },
         {
@@ -125,7 +151,6 @@ async function run() {
       ]).toArray()
 
       res.send(result)
-
     })
 
     app.get('/detailIssues/:id', async(req, res)=>{
@@ -925,7 +950,7 @@ async function run() {
         return res.status(404).send({message: 'user not found!'})
       }
 
-      const issueCount = user.issueCount
+      const issueCount = user.issueCount || 0
       const resolvedCount = user.solvedIssue || 0
       const rejectCount = user.rejectedIssueCount || 0
 
