@@ -4,6 +4,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors')
 const stripe = require('stripe')(process.env.stripe_secretKey)
 
+//toxicity Checker
+const {checkToxicity} = require('./checkToxicity')
+
 const port = process.env.PORT
 
 const app = express()
@@ -62,6 +65,7 @@ async function run() {
     const timelineCollection = database.collection('timeline')
     const paymentCollection = database.collection('payment')
     const reportCollection = database.collection('report')
+    const commentCollection = database.collection('comment')
     
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -267,7 +271,6 @@ async function run() {
 
       res.send({hasUpvoted, count})
     })
-
 
     //get timeline info
     app.get('/timeline/:timelineId', async(req, res)=> {
@@ -650,7 +653,6 @@ async function run() {
 
     //Dashoboard Stats
     //Utility function
-
     const getStartDate = (range) => {
       const now = new Date()
       
@@ -1020,6 +1022,15 @@ async function run() {
 
       res.send({result, dashboardQuickStats})
     })
+
+    //get comments
+    app.get('/comments/:issueId', async(req, res) => {
+      const { issueId } = req.params;
+      const comments = await commentCollection.find({issueId: new ObjectId(issueId)}).toArray()
+      res.send(comments)
+    })
+
+
     //post method
 
     //User Registration
@@ -1459,7 +1470,94 @@ async function run() {
       res.json({success: true})
     })
 
+    //add comment
+    app.post('/comments/:issueId', verifyFBToken, async(req, res) => {
+      const { issueId } = req.params;
+      const { commentText } = req.body;
+      const userEmail = req.decoded_email
 
+      /*-----------------------------User Check---------------------------*/
+      const user = await userCollection.findOne({ email: userEmail });
+      if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+      }
+
+      /*-----------------------------Find Issue-------------------------- */
+      const issueQuery = {_id: new ObjectId(issueId)}
+      const issue = await issueCollection.findOne(issueQuery)
+      if (!issue) {
+        return res.status(404).send({ message: 'Issue not found' })
+      }
+
+      /*----------------------------Toxicity Check----------------------- */
+      const toxicityResult = checkToxicity(commentText);
+      const isToxic = toxicityResult.score >= 0.8
+
+      const commentData = {
+          _id: new ObjectId(),
+          issueId: new ObjectId(issueId),
+          commentby: user._id,
+          commenterName: user.name,
+          commenterRole: user.role,
+          commenterPhoto: user.photoURL,
+          commentText: commentText,
+          isToxic: isToxic,
+          toxicityScore: toxicityResult.score,
+          commentedAt: new Date(),
+          replies: []
+      }
+
+      const result = await commentCollection.insertOne(commentData);
+      await issueCollection.updateOne(
+        {_id: new ObjectId(issueId)},
+        {$inc: {comments: 1}}
+      )
+      res.send({
+        success: true,
+        comment: commentData
+      })
+    })
+
+    //add reply
+    app.post('/comments/reply/:commentId', verifyFBToken, async(req, res) => {
+      const { commentId } = req.params
+      const { replyText } = req.body
+      const userEmail = req.decoded_email
+
+      const user = await userCollection.findOne({ email: userEmail })
+      if (!user) {
+        return res.status(404).send({ message: 'User not found' })
+      }
+
+      /*-----------------------Comment Check----------------------- */
+      const comment = await commentCollection.findOne({ _id: new ObjectId(commentId)})
+      if (!comment) {
+        return res.status(404).send({ message: 'Comment not found' });
+      }
+
+      /*------------------------Toxicity Check-------------------- */
+      const toxicityResult = await checkToxicity(replyText)
+      const isToxic = toxicityResult.score >= 0.8
+
+      // Reply object create
+      const replyData = {
+        repliesBy: user._id,
+        replierName: user.name,
+        replierRole: user.role,
+        replierPhoto: user.photoURL,
+        repliedText: replyText,
+        isToxic: isToxic,
+        toxicityScore: toxicityResult.score,
+        repliedAt: new Date()
+      };
+
+      // Comment replies array push
+      const result = await commentCollection.updateOne(
+        { _id: new ObjectId(commentId) },
+        { $push: { replies: replyData } }
+      )
+      res.send({success: true, reply: replyData})
+    })
 
     //---------------------------------------------------------------------//
     //put/update method
@@ -1787,59 +1885,6 @@ async function run() {
       res.send(result)
     })
 
-    // SUBSCRIBE: Make user premium
-    // app.post('/user/subscribe', verifyFBToken, async(req, res) => {
-    //   try {
-    //     const email = req.decoded_email;
-    //     const { amount, userId } = req.body;
-
-    //     // Find user
-    //     const user = await userCollection.findOne({ email });
-    //     if (!user) {
-    //       return res.status(404).send({ message: 'User not found' });
-    //     }
-
-    //     // Check if already premium
-    //     if (user.isPremium) {
-    //       return res.status(400).send({ message: 'User is already premium' });
-    //     }
-
-    //     // Check if blocked
-    //     if (user.isBlocked) {
-    //       return res.status(403).send({ message: 'Blocked users cannot subscribe' });
-    //     }
-
-    //     // In production, integrate with payment gateway here
-    //     // For now, we'll just update the user status
-        
-    //     // Verify payment amount
-    //     if (amount !== 1000) {
-    //       return res.status(400).send({ message: 'Invalid payment amount' });
-    //     }
-
-    //     // Update user to premium
-    //     const result = await userCollection.updateOne(
-    //       { email },
-    //       { 
-    //         $set: { 
-    //           isPremium: true,
-    //           subscribedAt: new Date(),
-    //           updatedAt: new Date()
-    //         } 
-    //       }
-    //     );
-
-    //     res.send({ 
-    //       success: true, 
-    //       message: 'Successfully subscribed to premium!',
-    //       data: result
-    //     });
-    //   } catch (error) {
-    //     console.error('Error subscribing:', error);
-    //     res.status(500).send({ message: 'Subscription failed' });
-    //   }
-    // });
-
     //------------------------------------------------------------------------------------//
     //delete method
     //------------------------------------------------------------------------------------//
@@ -1922,11 +1967,49 @@ async function run() {
         console.error('Error deleting issue:', error);
         res.status(500).send({ message: 'Failed to delete issue' });
       }
-    });
+    })
 
+    //DELETE: Comment
+    app.delete('/comments/:commentId', verifyFBToken, async (req, res) => {
+      const { commentId } = req.params
+      const userEmail = req.decoded_email
+
+      // Find user
+      const user = await userCollection.findOne({ email: userEmail })
+      if (!user) {
+        return res.status(404).send({ message: 'User not found' })
+      }
+
+      // Find comment
+      const comment = await commentCollection.findOne({ 
+        _id: new ObjectId(commentId) 
+      })
+
+      if (!comment) {
+        return res.status(404).send({ message: 'Comment not found' })
+      }
+
+      // Check permission (owner or admin)
+      if (comment.commentby.toString() !== user._id.toString() && user.role !== 'admin') {
+        return res.status(403).send({ message: 'Permission denied' })
+      }
+
+      // Delete comment
+      const result = await commentCollection.deleteOne({ 
+        _id: new ObjectId(commentId) 
+      })
+
+      // Update issue comment count
+      await issueCollection.updateOne(
+        { _id: comment.issueId },
+        { $inc: { comments: -1 } }
+      )
+
+      res.send({ success: true })
+    })
+    
     //router
-    //view count(just demo now)
-    //View Count Route
+    //View Count Route(Simple)
     app.post('/view-count/:issueId', async (req, res) => {
       const result = await issueCollection.findOneAndUpdate(
           { _id: new ObjectId(req.params.issueId) },
