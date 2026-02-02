@@ -1030,6 +1030,24 @@ async function run() {
       res.send(comments)
     })
 
+    //get issues for map
+    app.get('/map-view/issues', async(req, res)=>{
+      const result = await issueCollection.find({}, 
+        {projection:{
+          title: 1,
+          description: 1,
+          locationAt: 1,
+          status: 1,
+          priority: 1,
+          category: 1,
+          upvoteCount: 1,
+          mainPhoto: 1,
+          createdAt: 1
+      }}).toArray()
+
+      res.send(result)
+    })
+
 
     //post method
 
