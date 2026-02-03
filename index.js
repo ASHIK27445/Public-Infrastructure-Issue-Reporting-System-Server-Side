@@ -630,9 +630,17 @@ async function run() {
 
     //payment details
     app.get('/payment-details/:paymentId', verifyFBToken, async(req, res)=> {
+      const userEmail = req.decoded_email
+      const user = await userCollection.findOne({email: userEmail})
+      if(!user){
+        return res.status(401).send({message: "Unauthorized Access"})
+      }
       const {paymentId} = req.params
       const result = await paymentCollection.findOne({_id: new ObjectId(paymentId)})
-      res.send(result)
+      // console.log(result.userId.toString() === user._id.toString())
+      if(result.userId.toString() === user._id.toString() || user.role === 'admin'){
+        res.send(result)
+      }
     })
 
     //get all upvotes
