@@ -1096,6 +1096,52 @@ async function run() {
       res.send(result)
     })
 
+    //get payment history for admin
+    app.get('/admin/payment-history', verifyFBToken, async(req, res) => {
+      const page = parseInt(req.query.page) || 1
+      const limit = parseInt(req.query.limit) || 20
+      const skip = (page - 1) * limit
+      
+      // Get total count for pagination
+      const total = await paymentCollection.countDocuments()
+      
+      // Get payments with pagination
+      const payments = await paymentCollection.find()
+        .sort({ paymentAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray()
+      
+      // Get analytics
+      const analytics = await paymentCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$data.amount' },
+            totalTransactions: { $sum: 1 },
+            avgTransaction: { $avg: '$data.amount' }
+          }
+        }
+      ]).toArray()
+      
+      const analyticsData = analytics[0] || {
+        totalRevenue: 0,
+        totalTransactions: 0,
+        avgTransaction: 0
+      }
+      
+      res.send({
+        payments,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          itemsPerPage: limit
+        },
+        analytics: analyticsData
+      })
+    })
+
 
     //post method
 
@@ -2097,7 +2143,8 @@ async function run() {
         )
         // console.log(result)
         res.json({ success: true, viewsCount: result.viewsCount});
-    });
+    })
+
     
     // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
