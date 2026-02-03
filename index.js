@@ -463,6 +463,8 @@ async function run() {
       const amount = session.amount_total;
       const boostType = metadata.type;
 
+      console.log(issueId)
+
       /**-------------------------User Verification---------------------- */
       const user = await userCollection.findOne({_id: new ObjectId(userId)});
 
@@ -492,9 +494,11 @@ async function run() {
 
       // Check if boost already exists for this issue
       const existingPayment = await paymentCollection.findOne({
-        'data.stripeSessionId': sessionId,
-        actionType: { $regex: /boost/i }
-      });
+        'data.issueId': issueId,
+        actionType: boostType,
+        'data.stripeSessionId': sessionId
+      })
+
 
       if (existingPayment) {
         console.log('ℹ️ Boost payment already recorded for this session');
@@ -510,6 +514,13 @@ async function run() {
       }
 
       /**-------------------------Update Issue Priority---------------------- */
+
+      let priority
+      if(boostType === 'high_boost'){
+        priority = 'Critical'
+      }else if(boostType === 'normal_boost'){
+        priority = 'High'
+      }
       
       if (issueId && issue) {
         // Update issue priority to "High"
@@ -517,18 +528,18 @@ async function run() {
           { _id: new ObjectId(issueId) },
           { 
             $set: { 
-              priority: 'High',
+              priority: priority,
               isBoosted: true,
               boostedAt: new Date(),
               boostedBy: user._id,
               boostType: boostType,
-              boostAmount: amount
+              boostAmount: amount/100
             },
             $inc: { boostCount: 1 }
           }
         );
 
-        console.log('✅ Issue priority updated to High');
+        console.log(`✅ Issue priority updated to ${priority}`);
       }
 
       /**-------------------------Create Timeline Entry---------------------- */
@@ -539,7 +550,7 @@ async function run() {
             changes: {
               type: "boost",
               title: "Boosted Priority",
-              description: `Issue is boosted on High Priority`,
+              description: `Issue is boosted on ${priority} Priority`,
               role: user?.role,
               updatedBy: user?.name,
               createdAt: new Date()
@@ -600,7 +611,7 @@ async function run() {
         responseData.issue = {
           _id: issue._id,
           title: issue.title,
-          priority: 'High', // Updated priority
+          priority: priority, // Updated priority
           status: issue.status,
           isBoosted: true
         };
@@ -1069,7 +1080,7 @@ async function run() {
 
     //get issues for map
     app.get('/map-view/issues', async(req, res)=>{
-      const result = await issueCollection.find({}, 
+      const result = await issueCollection.find({isReviewed: true}, 
         {projection:{
           title: 1,
           description: 1,
@@ -1390,6 +1401,11 @@ async function run() {
         productName = 'Issue Boost';
         description = 'Boost this issue for higher priority';
         success_url = `${process.env.FRONTEND_URL}/payment-boost-success?session_id={CHECKOUT_SESSION_ID}`
+      }else if(type === 'high_boost'){
+        amount = 1200
+        productName = 'High Isse Boost'
+        description = 'Boost this issue for higher priority'
+        success_url = `${process.env.FRONTEND_URL}/payment-boost-success?session_id={CHECKOUT_SESSION_ID}`
       }
 
       /**------------------checking user------------------------------*/
@@ -1418,6 +1434,13 @@ async function run() {
           type: type,
           issueId: issueId
         }
+      }else if(type === 'high_boost'){
+        metadata = {
+          userId: userId,
+          userEmail: userEmail,
+          amount: amount,
+          type: type,
+          issueId: issueId}
       }else{
         metadata = {
           userId: userId,
