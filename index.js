@@ -441,14 +441,14 @@ async function run() {
       /**------------------------Retrieve Session------------------------- */
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       
-      console.log('🔍 Boost Session Data:', {
-        sessionId: session.id,
-        payment_status: session.payment_status,
-        metadata: session.metadata
-      });
+      // console.log('🔍 Boost Session Data:', {
+      //   sessionId: session.id,
+      //   payment_status: session.payment_status,
+      //   metadata: session.metadata
+      // });
 
       if (session.payment_status !== 'paid') {
-        console.log('❌ Boost payment not completed:', session.payment_status);
+        // console.log('❌ Boost payment not completed:', session.payment_status);
         return res.json({ 
           success: false, 
           paid: false, 
@@ -469,7 +469,7 @@ async function run() {
       const user = await userCollection.findOne({_id: new ObjectId(userId)});
 
       if (!user) {
-        console.log('❌ User not found for boost payment');
+        // console.log('❌ User not found for boost payment');
         return res.status(404).json({ 
           success: false, 
           message: 'User not found'
@@ -482,7 +482,7 @@ async function run() {
         issue = await issueCollection.findOne({_id: new ObjectId(issueId)});
         
         if (!issue) {
-          console.log('❌ Issue not found for boost');
+          // console.log('❌ Issue not found for boost');
           return res.status(404).json({ 
             success: false, 
             message: 'Issue not found'
@@ -490,7 +490,7 @@ async function run() {
         }
       }
 
-      console.log('✅ All verifications passed for boost payment');
+      // console.log('✅ All verifications passed for boost payment');
 
       // Check if boost already exists for this issue
       const existingPayment = await paymentCollection.findOne({
@@ -501,7 +501,7 @@ async function run() {
 
 
       if (existingPayment) {
-        console.log('ℹ️ Boost payment already recorded for this session');
+        // console.log('ℹ️ Boost payment already recorded for this session');
         return res.json({
           success: true,
           paid: true,
@@ -539,7 +539,7 @@ async function run() {
           }
         );
 
-        console.log(`✅ Issue priority updated to ${priority}`);
+        // console.log(`✅ Issue priority updated to ${priority}`);
       }
 
       /**-------------------------Create Timeline Entry---------------------- */
@@ -559,7 +559,7 @@ async function run() {
         }
       )
 
-      console.log('✅ Timeline entry created for boost');
+      // console.log('✅ Timeline entry created for boost');
 
       /**-------------------------Create Payment Record---------------------- */
       await paymentCollection.insertOne({
@@ -584,7 +584,7 @@ async function run() {
         },
         paymentAt: new Date()
       })
-      console.log('✅ Payment record saved');
+      // console.log('✅ Payment record saved');
 
       /**-------------------------Send Response---------------------- */
       const responseData = {
@@ -761,8 +761,8 @@ async function run() {
       const startDate = getStartDate(range)
       const prevStartDate = getPreviousStartDate(range)
       // console.log('Range:', range)
-      console.log('Start Date:', startDate)
-      console.log('previous date', prevStartDate)
+      // console.log('Start Date:', startDate)
+      // console.log('previous date', prevStartDate)
       // console.log('Current Date:', new Date())
 
       const dateFilter = startDate
@@ -1221,7 +1221,7 @@ async function run() {
       }
 
       const timeline = await timelineCollection.insertOne(timellineEntry)
-      console.log(timeline)
+      // console.log(timeline)
       // Increment user's issue count
       await userCollection.updateOne(
         { _id: user._id },
@@ -1255,7 +1255,7 @@ async function run() {
       staffInfo.assignIssued = 0
       staffInfo.resolvedIssued = 0
       staffInfo.createdAt = new Date()
-      console.log(staffInfo)
+      // console.log(staffInfo)
       const result = await userCollection.insertOne(staffInfo)
       res.send({_id: result.insertedId, ...staffInfo})
     })
@@ -1570,7 +1570,7 @@ async function run() {
         reportedAt: new Date()
       }
 
-      console.log(reportData)
+      // console.log(reportData)
 
       /*----------------------Find Issues--------------------------------*/
       const issue = await issueCollection.findOne({_id: new ObjectId(id)})
@@ -2155,7 +2155,7 @@ async function run() {
 
     
     // await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
 
     //await client.close();

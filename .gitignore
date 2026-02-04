@@ -3,3 +3,6 @@ node_modules
 
 piirs.json
 .vercel
+
+package-lock.json
+package.json
