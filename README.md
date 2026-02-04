@@ -247,29 +247,6 @@ PIIRS addresses these challenges by providing:
 ---
 
 ## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    CLIENT APPLICATIONS                       │
-│         (Web App • Mobile App • Admin Dashboard)             │
-└────────────────────┬────────────────────────────────────────┘
-                     │ HTTPS/REST API
-┌────────────────────┴────────────────────────────────────────┐
-│                   EXPRESS.JS SERVER                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Auth Layer   │  │ API Routes   │  │ Middleware   │      │
-│  │ (Firebase)   │  │ (REST)       │  │ (CORS, etc)  │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-        ┌────────────┼────────────┐
-        │            │            │
-┌───────▼─────┐ ┌───▼─────┐ ┌───▼──────┐
-│  MongoDB    │ │Firebase │ │  Stripe  │
-│  (Database) │ │  Auth   │ │ Payments │
-└─────────────┘ └─────────┘ └──────────┘
-```
-
 ### Request Flow
 
 1. Client sends request with Firebase ID token
