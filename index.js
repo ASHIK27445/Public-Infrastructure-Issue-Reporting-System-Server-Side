@@ -976,7 +976,7 @@ async function run() {
             reported: { $sum: 1 },
             resolved: {
               $sum: {
-                $cond: [{ $eq: ['$status', 'Resolved'] }, 1, 0]
+                $cond: [{ $ifNull: ['$resolvedAt', false] }, 1, 0]
               }
             }
           }
@@ -1468,7 +1468,7 @@ async function run() {
         return res.status(404).json({success: false, message: 'User not found!'})
       }
 
-      if (user.isPremium && type !== 'normal_boost') {
+      if (user.isPremium && (type !== 'normal_boost' && type !=='high_boost')) {
         return res.status(400).json({ success: false, message: 'User is already premium' });
       }
 
