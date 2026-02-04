@@ -12,7 +12,7 @@
 [![Firebase](https://img.shields.io/badge/Firebase-039BE5?style=for-the-badge&logo=Firebase&logoColor=white)](https://firebase.google.com/)
 [![Stripe](https://img.shields.io/badge/Stripe-626CD9?style=for-the-badge&logo=Stripe&logoColor=white)](https://stripe.com/)
 
-[Features](#features) • [Installation](#installation) • [API Documentation](#api-documentation) • [Contributing](#contributing)
+[Features](#features) • [Technology Stack](#technology-stack) • [API Documentation](#api-documentation) • [Contributing](#contributing)
 
 </div>
 
@@ -25,8 +25,6 @@
 - [Features](#features)
 - [Technology Stack](#technology-stack)
 - [System Architecture](#system-architecture)
-- [Getting Started](#getting-started)
-- [Environment Configuration](#environment-configuration)
 - [API Documentation](#api-documentation)
 - [Security Features](#security-features)
 - [Real-World Impact](#real-world-impact)
@@ -320,131 +318,6 @@ PIIRS addresses these challenges by providing:
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-Before installing PIIRS, ensure you have:
-
-- Node.js (v14.0.0 or higher)
-- npm or yarn package manager
-- MongoDB Atlas account (or local MongoDB instance)
-- Firebase project with Admin SDK credentials
-- Stripe account for payment processing
-- Git for version control
-
-### Installation Steps
-
-**Clone the Repository**
-```bash
-git clone https://github.com/yourusername/piirs-backend.git
-cd piirs-backend
-```
-
-**Install Dependencies**
-```bash
-npm install
-```
-
-The following packages will be installed:
-- express: Web framework
-- mongodb: Database driver
-- firebase-admin: Authentication
-- stripe: Payment processing
-- cors: Cross-origin resource sharing
-- dotenv: Environment management
-
-**Set Up Environment Variables**
-
-Copy the example environment file and configure:
-```bash
-cp .env.example .env
-```
-
-Edit the `.env` file with your credentials (see Environment Configuration section)
-
-**Convert Firebase Credentials**
-
-Use the included utility to convert your Firebase service account JSON to base64:
-```bash
-node keyConverter.js
-```
-
-Copy the output and paste it into your `.env` file as `FB_KEY`
-
-**Start the Development Server**
-```bash
-npm run dev
-```
-
-The server will start on the port specified in your `.env` file (default: 5000)
-
-**Verify Installation**
-
-Visit `http://localhost:5000` in your browser. You should see:
-```
-Hello there!!!!
-```
-
----
-
-## Environment Configuration
-
-Create a `.env` file in the root directory with the following variables:
-
-### Server Configuration
-```env
-PORT=5000
-NODE_ENV=development
-```
-
-### Database Configuration
-```env
-DB_USER=your_mongodb_username
-DB_PASS=your_mongodb_password
-```
-
-**Important:** Replace `your_mongodb_username` and `your_mongodb_password` with your actual MongoDB Atlas credentials.
-
-The MongoDB URI is constructed as:
-```
-mongodb+srv://${DB_USER}:${DB_PASS}@cluster0.md2layq.mongodb.net/?appName=Cluster0
-```
-
-### Firebase Configuration
-```env
-FB_KEY=your_base64_encoded_firebase_service_account
-```
-
-**Steps to Generate Firebase Key:**
-
-1. Go to Firebase Console (https://console.firebase.google.com/)
-2. Select your project
-3. Navigate to Project Settings
-4. Go to Service Accounts tab
-5. Click "Generate New Private Key"
-6. Save the JSON file as `piirs.json` in the project root
-7. Run `node keyConverter.js` to convert to base64
-8. Copy the output to `FB_KEY` in `.env`
-
-### Stripe Configuration
-```env
-stripe_secretKey=sk_test_xxxxxxxxxxxxx
-stripe_signature_secret=whsec_xxxxxxxxxxxxx
-```
-
-**Steps to Get Stripe Keys:**
-
-1. Go to Stripe Dashboard (https://dashboard.stripe.com/)
-2. Navigate to Developers → API Keys
-3. Copy the Secret Key to `stripe_secretKey`
-4. For webhook secret:
-   - Go to Developers → Webhooks
-   - Add endpoint: `https://yourdomain.com/webhook`
-   - Copy the signing secret to `stripe_signature_secret`
-
----
-
 ## API Documentation
 
 ### Base URL
@@ -463,293 +336,86 @@ Authorization: Bearer <firebase_id_token>
 
 ### Public Endpoints
 
-#### Get All Issues (Paginated)
-```http
-GET /allissues?page=1&limit=8
-```
-
-Retrieves all reviewed issues with pagination support. Issues are sorted by priority, status, and creation date.
-
-**Query Parameters:**
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 8)
-
-**Response:** Array of issue objects with reporter information
-
-#### Get Issue Details
-```http
-GET /detailIssues/:id
-```
-
-Retrieves comprehensive details for a specific issue including reporter information and statistics.
-
-**Path Parameters:**
-- `id`: MongoDB ObjectId of the issue
-
-**Response:** Detailed issue object with reporter profile
-
-#### Increment View Count
-```http
-POST /view-count/:issueId
-```
-
-Increments the view count for an issue. Used for tracking issue popularity.
-
-**Path Parameters:**
-- `issueId`: MongoDB ObjectId of the issue
-
-### Protected Endpoints
-
-All protected endpoints require authentication via Firebase token.
-
-#### User Management
-
-**Get Current User Profile**
-```http
-GET /user/citizen
-```
-
-Returns the profile of the currently authenticated user.
-
-**Get User Role by Email**
-```http
-GET /user/role/:email
-```
-
-Retrieves user role information by email address.
-
-**Update User Profile**
-```http
-PATCH /user/update
-```
-
-Updates user profile information (name, phone, address).
-
-#### Issue Management
-
-**Create New Issue**
-```http
-POST /create-issue
-```
-
-Creates a new issue report. Automatically sets the reporter, creation date, and initial status.
-
-**Get My Issues**
-```http
-GET /myissues/:id
-```
-
-Retrieves all issues reported by a specific user.
-
-**Update Issue**
-```http
-PATCH /issue/:id
-```
-
-Updates issue details. Only the issue owner can update.
-
-**Delete Issue**
-```http
-DELETE /issue/:id
-```
-
-Deletes an issue. Only the issue owner can delete, and user's issue count is decremented.
-
-#### Comment System
-
-**Get Comments for Issue**
-```http
-GET /comments/:issueId
-```
-
-Retrieves all comments for a specific issue, including commenter information.
-
-**Add Comment**
-```http
-POST /comments
-```
-
-Adds a comment to an issue. Includes automatic toxicity detection.
-
-**Update Comment**
-```http
-PATCH /comments/:commentId
-```
-
-Updates an existing comment. Only comment owner can update.
-
-**Delete Comment**
-```http
-DELETE /comments/:commentId
-```
-
-Deletes a comment. Owner or admin can delete.
-
-#### Voting System
-
-**Get Upvote Status**
-```http
-GET /upvotes/:issueId
-```
-
-Checks if current user has upvoted an issue.
-
-**Upvote Issue**
-```http
-POST /upvote
-```
-
-Adds an upvote to an issue. Prevents duplicate votes.
-
-**Remove Upvote**
-```http
-DELETE /upvote/:issueId
-```
-
-Removes user's upvote from an issue.
-
-#### Staff Endpoints
-
-**Get Assigned Issues**
-```http
-GET /assigned-issues/:staffId
-```
-
-Retrieves all issues assigned to a specific staff member.
-
-**Update Assigned Issue**
-```http
-PATCH /assigned/:issueId
-```
-
-Updates status and adds notes for assigned issues.
-
-#### Admin Endpoints
-
-**Get All Issues (Admin View)**
-```http
-GET /admin/allissues
-```
-
-Retrieves all issues with reporter information. No filtering applied.
-
-**Get All Users**
-```http
-GET /allusers
-```
-
-Retrieves complete list of all users in the system.
-
-**Get All Staff**
-```http
-GET /allstaff
-```
-
-Retrieves list of users with staff role.
-
-**Create User**
-```http
-POST /create/user
-```
-
-Creates a new user account (staff or citizen).
-
-**Update User Role**
-```http
-PATCH /role/update
-```
-
-Changes a user's role (citizen/staff/admin).
-
-**Delete Staff**
-```http
-DELETE /delete/staff/:id
-```
-
-Deletes a staff member. Only admin can perform. Checks for assigned issues.
-
-**Assign Issue**
-```http
-POST /assign-issue
-```
-
-Assigns an issue to a staff member.
-
-**Update Priority**
-```http
-PATCH /update-priority/:id
-```
-
-Changes the priority level of an issue.
-
-**Update Review Status**
-```http
-PATCH /update-review/:id
-```
-
-Marks an issue as reviewed or not reviewed.
-
-**Reject Issue**
-```http
-PATCH /reject-issue/:id
-```
-
-Marks an issue as rejected with reason.
-
-#### Reports
-
-**Get All Reports**
-```http
-GET /reports
-```
-
-Retrieves all issue reports for moderation.
-
-**Report Issue**
-```http
-POST /report-issue
-```
-
-Reports an issue as inappropriate.
-
-#### Analytics
-
-**Admin Analytics**
-```http
-GET /admin/analytics
-```
-
-Comprehensive dashboard analytics including total issues, resolution rates, user statistics, and trends.
-
-**Staff Analytics**
-```http
-GET /staff/analytics/:staffId
-```
-
-Individual staff performance metrics.
-
-#### Payment System
-
-**Create Payment Intent**
-```http
-POST /create-payment-intent
-```
-
-Creates a Stripe payment intent for subscription.
-
-**Stripe Webhook**
-```http
-POST /webhook
-```
-
-Handles Stripe webhook events for subscription management.
-
-**Get Subscription Status**
-```http
-GET /subscription/:userId
-```
-
-Retrieves current subscription status for a user.
+| Method | Endpoint | Description | Parameters |
+|--------|----------|-------------|------------|
+| GET | `/allissues` | Get all reviewed issues with pagination | `page` (query, optional), `limit` (query, optional) |
+| GET | `/detailIssues/:id` | Get detailed information about a specific issue | `id` (path, required) |
+| POST | `/view-count/:issueId` | Increment view count for an issue | `issueId` (path, required) |
+
+### User Management Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/user/role/:email` | Get user role by email | No | Public |
+| GET | `/user/citizen` | Get current authenticated user profile | Yes | All |
+| PATCH | `/user/update` | Update user profile (name, phone, address) | Yes | All |
+| GET | `/allusers` | Get all users in the system | Yes | Admin |
+| GET | `/allstaff` | Get all staff members | Yes | Admin |
+| POST | `/create/user` | Create new user account (staff/citizen) | Yes | Admin |
+| PATCH | `/role/update` | Update user role | Yes | Admin |
+| DELETE | `/delete/staff/:id` | Delete a staff member | Yes | Admin |
+
+### Issue Management Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| POST | `/create-issue` | Create a new issue report | Yes | Citizen |
+| GET | `/myissues/:id` | Get all issues reported by user | Yes | All |
+| GET | `/manageissues/:email` | Get issues by citizen email | Yes | All |
+| PATCH | `/issue/:id` | Update issue details | Yes | Owner |
+| DELETE | `/issue/:id` | Delete an issue | Yes | Owner |
+| GET | `/admin/allissues` | Get all issues (admin view) | Yes | Admin |
+| POST | `/assign-issue` | Assign issue to staff member | Yes | Admin |
+| PATCH | `/update-priority/:id` | Update issue priority level | Yes | Admin |
+| PATCH | `/update-review/:id` | Update issue review status | Yes | Admin |
+| PATCH | `/reject-issue/:id` | Reject an issue with reason | Yes | Admin |
+| GET | `/assigned-issues/:staffId` | Get issues assigned to staff | Yes | Staff/Admin |
+| PATCH | `/assigned/:issueId` | Update assigned issue status | Yes | Staff |
+
+### Comment System Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/comments/:issueId` | Get all comments for an issue | Yes | All |
+| POST | `/comments` | Add a comment to an issue | Yes | All |
+| PATCH | `/comments/:commentId` | Update an existing comment | Yes | Owner |
+| DELETE | `/comments/:commentId` | Delete a comment | Yes | Owner/Admin |
+
+### Voting System Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/upvotes/:issueId` | Get upvote status for issue | Yes | All |
+| POST | `/upvote` | Upvote an issue | Yes | All |
+| DELETE | `/upvote/:issueId` | Remove upvote from issue | Yes | All |
+
+### Report Management Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/reports` | Get all issue reports | Yes | Admin |
+| POST | `/report-issue` | Report an inappropriate issue | Yes | All |
+
+### Timeline Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/timeline/:issueId` | Get timeline of changes for issue | Yes | All |
+
+### Payment System Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| POST | `/create-payment-intent` | Create Stripe payment intent | Yes | All |
+| POST | `/webhook` | Handle Stripe webhook events | No | System |
+| GET | `/subscription/:userId` | Get user subscription status | Yes | All |
+
+### Analytics Endpoints
+
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/admin/analytics` | Get comprehensive dashboard analytics | Yes | Admin |
+| GET | `/staff/analytics/:staffId` | Get staff performance metrics | Yes | Staff/Admin |
 
 ---
 
