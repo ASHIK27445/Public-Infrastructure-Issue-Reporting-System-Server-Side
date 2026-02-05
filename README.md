@@ -31,7 +31,6 @@
 - [Utilities](#utilities)
 - [Performance](#performance)
 - [Contributing](#contributing)
-- [Roadmap](#roadmap)
 - [License](#license)
 
 ---
@@ -673,34 +672,22 @@ Administrators can adjust:
 - Efficient sorting with compound indexes
 - Limited result sets with pagination
 
-### Current Metrics
-
-**Response Times**
-- Simple GET requests: 50-100ms average
-- Complex aggregation queries: 150-300ms average
-- File upload operations: 500ms-2s (depending on file size)
-
-**Scalability**
-- Current capacity: 100,000+ concurrent users
-- Database: 1M+ issue records without performance degradation
-- MongoDB Atlas auto-scaling handles traffic spikes
-- Horizontal scaling ready with load balancer
 
 ### Future Improvements
 
-**Phase 1 (Q2 2026):**
+**Phase 1 :**
 - Redis caching layer for frequently accessed data
 - CDN integration for media files
 - WebSocket support for real-time notifications
 - Query optimization based on production patterns
 
-**Phase 2 (Q3 2026):**
+**Phase 2 :**
 - Microservices architecture for better scaling
 - Database sharding for geographic distribution
 - Advanced caching strategies
 - Performance monitoring dashboard
 
-**Phase 3 (Q4 2026):**
+**Phase 3 :**
 - Multi-region deployment
 - Edge computing for reduced latency
 - Machine learning for predictive scaling
@@ -784,77 +771,6 @@ git push origin feature/your-feature-name
 
 ---
 
-## Roadmap
-
-### Version 1.0 (Completed - Q1 2025)
-
-**Core Features:**
-- User authentication and authorization system
-- Issue creation, reading, updating, and deletion
-- Comment system with toxicity detection
-- Upvoting mechanism
-- Admin dashboard with analytics
-- Staff assignment and workflow system
-- Stripe payment integration
-- Timeline tracking for all issue changes
-
-**Infrastructure:**
-- MongoDB database with optimized schema
-- Firebase authentication integration
-- Express.js REST API
-- CORS and security middleware
-
-### Version 1.5 (In Progress - Q2 2026)
-
-**Planned Features:**
-- Real-time notifications via WebSocket
-- Email notification system for status updates
-- Advanced search and filtering capabilities
-- Multi-language interface support
-- Progressive Web App (PWA) capabilities
-- Enhanced mobile responsiveness
-
-**Improvements:**
-- Performance optimization with caching
-- Improved toxicity detection with machine learning
-- Enhanced analytics dashboard
-- Better error handling and logging
-
-### Version 2.0 (Planned - Q4 2026)
-
-**Major Features:**
-- AI-powered automatic issue categorization
-- Predictive analytics for issue resolution times
-- Integration with city GIS systems
-- Chatbot for citizen assistance
-- Open data API for researchers and developers
-- Native mobile applications (iOS and Android)
-- Voice-based issue reporting
-
-**Platform Enhancements:**
-- Microservices architecture
-- Multi-region deployment
-- Advanced analytics with machine learning
-- Blockchain integration for transparency audit
-
-### Version 3.0 (Future Vision - 2027)
-
-**Innovation Features:**
-- IoT sensor integration for automatic issue detection
-- Augmented reality for issue visualization
-- Gamification system for civic engagement
-- Multi-city platform support
-- White-label solution for other municipalities
-- Advanced predictive maintenance
-
-**Enterprise Features:**
-- SLA management
-- Advanced reporting and business intelligence
-- Custom workflow engine
-- Third-party integration marketplace
-
----
-
 ## License
 
 This project is licensed under the MIT License.
@@ -870,41 +786,12 @@ This project is licensed under the MIT License.
 - Stripe for secure payment processing
 - Express.js community for excellent middleware ecosystem
 
-**Open Source Community:**
-- Contributors and maintainers of all dependencies
-- GitHub for hosting and collaboration tools
-- Stack Overflow community for troubleshooting support
-
-**Inspiration:**
-- Global civic tech initiatives
-- Smart city projects worldwide
-- Open government data movements
-
 ---
 
 ## Support and Contact
 
-### Technical Support
+**Email:** mdashikulislam27889@gmail.com
 
-**Documentation:** [docs.piirs.com](https://docs.piirs.com)
-
-**Issue Tracker:** [GitHub Issues](https://github.com/yourusername/piirs-backend/issues)
-
-**Email Support:** support@piirs.com
-
-### Business Inquiries
-
-**Email:** business@piirs.com
-
-**Website:** [www.piirs.com](https://www.piirs.com)
-
-### Community
-
-**GitHub:** [github.com/yourusername/piirs-backend](https://github.com/yourusername/piirs-backend)
-
-**Discord:** [Join our community](https://discord.gg/piirs)
-
-**Twitter:** [@piirs_tech](https://twitter.com/piirs_tech)
 
 ---
 
