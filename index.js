@@ -802,6 +802,7 @@ async function run() {
       })
 
       // console.log(pendingIssues, "prev:",  prevPendingIssues)
+
       // Pending issues percentage change
       let pendingIssuesPercentage = 0
       if (prevPendingIssues > 0) {
@@ -817,8 +818,16 @@ async function run() {
 
       const resolvedIssues = await issueCollection.countDocuments({
         ...issueFilter,
-        status: 'Resolved'
+        status: 'Closed'
       })
+
+      const prevResolvedIssues = await issueCollection.countDocuments({
+        ...prevFilter,
+        status: 'Closed'
+      })
+
+      const resolvedIssuePercentage = prevResolvedIssues > 0 ? 
+      Math.round(((resolvedIssues-prevResolvedIssues)/prevResolvedIssues)*100) : resolvedIssues == 0 ? 0 : 100
 
       const payments = await paymentCollection.aggregate([
         {
@@ -835,14 +844,44 @@ async function run() {
         }
       ]).toArray()
 
+      //previous payment
+      const prevPayments = await paymentCollection.aggregate([
+        {
+          $match: {
+            userId: user._id,
+            ...(prevStartDate && {
+              paymentAt: {
+                $gte: prevStartDate,
+                $lt: startDate
+              }
+            })
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$data.amount' }
+          }
+        }
+      ]).toArray()
 
       const totalPayments = payments[0]?.total || 0
 
-      // console.log(totalIssues, resolvedIssues)
+      const prevTotalPayments = prevPayments[0]?.total || 0
+
+      const paymentPercentageCalculation = ((totalPayments - prevTotalPayments)/prevTotalPayments)*100
+
+      const paymentPercentage = prevTotalPayments > 0 ? Math.round(paymentPercentageCalculation) : 0
 
       const successRate = totalIssues
         ? Math.round((resolvedIssues / totalIssues) * 100)
         : 0
+
+      const previousSuccessRate = prevTotalIssues ?
+      Math.round((prevResolvedIssues / prevTotalIssues)) : 0
+
+      const successRatePercentage = successRate == 0 && previousSuccessRate == 0 ? 0 :
+      previousSuccessRate > 0 ? Math.round(((successRate - previousSuccessRate)/previousSuccessRate)*100) : 100
 
       //category distribution
       const categoryAggregation = await issueCollection.aggregate([
@@ -931,8 +970,11 @@ async function run() {
         pendingIssuesPercentage,
         inProgressIssues,
         resolvedIssues,
+        resolvedIssuePercentage,
         totalPayments,
+        paymentPercentage,
         successRate,
+        successRatePercentage,
         categoryDistribution,
         priorityDistribution,
         resolutionTimeData
@@ -1027,7 +1069,7 @@ async function run() {
       let smallestResolutionDay = null
 
       const resolvedIssues = allIssues.filter(
-        issue => issue.status === 'Resolved' && issue.resolvedAt
+        issue =>  issue.resolvedAt
       )
 
       if (resolvedIssues.length > 0) {
