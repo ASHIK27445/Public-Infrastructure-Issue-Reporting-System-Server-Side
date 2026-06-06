@@ -34,7 +34,7 @@ const verifyFBToken = async (req, res, next) => {
   try{
     const idToken = token.split(' ')[1]
     const decoded = await admin.auth().verifyIdToken(idToken)
-    // console.log("decoded info", decoded)
+    console.log("decoded info", decoded)
     req.decoded_email = decoded.email
     next()
   }catch(err){
@@ -72,7 +72,7 @@ async function run() {
     const paymentCollection = database.collection('payment')
     const reportCollection = database.collection('report')
     const commentCollection = database.collection('comment')
-    
+
     //get method
     app.get('/user/role/:email', async(req, res)=>{
         const {email} = req.params
@@ -2216,7 +2216,7 @@ app.get('/', (req, res)=>{
     res.send("Hello there!!!!")
 })
 
-setupCommentSummaryRoute(app, model);
+setupCommentSummaryRoute(app, model, verifyFBToken);
 
 app.listen(port, ()=>{
     console.log(`App is running on the port ${port}`)

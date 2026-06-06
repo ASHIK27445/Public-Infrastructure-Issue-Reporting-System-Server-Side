@@ -22,7 +22,7 @@ const retryWithBackoff = async (fn, maxRetries = 3, initialDelay = 2000) => {
       
       // Calculate delay (exponential with jitter)
       const delay = initialDelay * Math.pow(2, i) + Math.random() * 1000;
-    //   console.log(`⚠️ Rate limited. Retry ${i + 1}/${maxRetries} after ${Math.round(delay)}ms`);
+      // console.log(`⚠️ Rate limited. Retry ${i + 1}/${maxRetries} after ${Math.round(delay)}ms`);
       
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -39,7 +39,7 @@ const processQueue = async (model) => {
   const { res, prompt, cacheKey, startTime } = requestQueue.shift();
   
   // Log queue status
-//   console.log(`📊 Queue size: ${requestQueue.length + 1}, Processing: ${cacheKey}`);
+  // console.log(`📊 Queue size: ${requestQueue.length + 1}, Processing: ${cacheKey}`);
   
   try {
     // Check cache first
@@ -113,13 +113,15 @@ const startCacheCleaner = () => {
 };
 
 // Main function to setup the route
-const setupCommentSummaryRoute = (app, model) => {
+const setupCommentSummaryRoute = (app, model, verifyFBToken) => {
   // Start cache cleaner
   startCacheCleaner();
   
-  // Comment summary route
-  app.post("/comment-summary", async (req, res) => {
+  // Comment summary route with verifyFBToken middleware
+  app.post("/comment-summary", verifyFBToken, async (req, res) => {
     const { issueTitle, comments } = req.body;
+    const userEmail = req.decoded_email; // Get user email from middleware
+    // console.log(userEmail)
 
     // Validation
     if (!comments || comments.length < 2) {
@@ -128,7 +130,7 @@ const setupCommentSummaryRoute = (app, model) => {
 
     // Create cache key based on content (not just length)
     const commentsHash = comments.map(c => `${c.name}:${c.text.substring(0, 50)}`).join('|');
-    const cacheKey = `${issueTitle}_${comments.length}_${Buffer.from(commentsHash).toString('base64').substring(0, 50)}`;
+    const cacheKey = `${issueTitle}_${comments.length}_${userEmail}_${Buffer.from(commentsHash).toString('base64').substring(0, 50)}`;
     
     // Check if already processing same request
     const existingInQueue = requestQueue.some(item => item.cacheKey === cacheKey);
@@ -169,7 +171,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
       startTime: Date.now()
     });
     
-    // console.log(`📝 Request queued. Queue size: ${requestQueue.length}`);
+    // console.log(`📝 Request queued by user: ${userEmail}. Queue size: ${requestQueue.length}`);
     
     // Start processing if not already
     if (!isProcessingSummary) {
