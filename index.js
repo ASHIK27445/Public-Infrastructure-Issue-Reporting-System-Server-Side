@@ -3,6 +3,8 @@ const express = require('express')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors')
 const stripe = require('stripe')(process.env.stripe_secretKey)
+const { setupCommentSummaryRoute } = require('./googlegenerativeai');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 //toxicity Checker
 const {checkToxicity} = require('./checkToxicity')
@@ -39,6 +41,10 @@ const verifyFBToken = async (req, res, next) => {
     return res.status(401).send({message: 'unauthorized access'})
   }
 }
+
+//comments insight generaTIVE GOOGLE AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.md2layq.mongodb.net/?appName=Cluster0`;
@@ -2209,6 +2215,8 @@ run().catch(console.dir);
 app.get('/', (req, res)=>{
     res.send("Hello there!!!!")
 })
+
+setupCommentSummaryRoute(app, model);
 
 app.listen(port, ()=>{
     console.log(`App is running on the port ${port}`)
