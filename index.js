@@ -72,6 +72,7 @@ async function run() {
     const paymentCollection = database.collection('payment')
     const reportCollection = database.collection('report')
     const commentCollection = database.collection('comment')
+    const evetCollection = database.collection('event')
 
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -1738,6 +1739,36 @@ async function run() {
       )
       res.send({success: true, reply: replyData})
     })
+
+    //event create
+    app.post('/events/create', async (req, res) => {
+      try {
+        const payload = req.body;
+
+        const eventDoc = {
+          ...payload,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          status: "upcoming",
+          volunteersJoined: 0,
+        };
+
+        const result = await eventCollection.insertOne(eventDoc);
+
+        res.status(201).send({
+          success: true,
+          insertedId: result.insertedId,
+          message: "Event created successfully",
+        });
+      } catch (error) {
+        console.error(error);
+
+        res.status(500).send({
+          success: false,
+          message: "Failed to create event",
+        });
+      }
+    });
 
     //---------------------------------------------------------------------//
     //put/update method
