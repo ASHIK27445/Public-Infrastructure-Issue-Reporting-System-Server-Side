@@ -72,7 +72,7 @@ async function run() {
     const paymentCollection = database.collection('payment')
     const reportCollection = database.collection('report')
     const commentCollection = database.collection('comment')
-    const evetCollection = database.collection('event')
+    const eventCollection = database.collection('event')
 
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -1741,10 +1741,24 @@ async function run() {
     })
 
     //event create
-    app.post('/events/create', async (req, res) => {
-      try {
-        const payload = req.body;
+    app.post('/events/create', verifyFBToken,  async (req, res) => {
+      const payload = req.body;
+      /*--------------------Admin check--------------------------*/
+      const adminUser = await userCollection.findOne({ email: req.decoded_email });
+      
+      if (!adminUser || adminUser.role !== 'admin') {
+        return res.status(403).send({ message: "Forbidden! Admin access required" });
+      }
 
+      const {issueId, staffId} = req.body
+
+      /**-----------------Staff query----------------------------- */
+      const staff = await userCollection.findOne({_id: new ObjectId(staffId)})
+      if(!staff){
+        return res.status(404).send({message: "Staff not found!"})
+      }
+
+      try {
         const eventDoc = {
           ...payload,
           createdAt: new Date(),
