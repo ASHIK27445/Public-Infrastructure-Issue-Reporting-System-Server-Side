@@ -1199,6 +1199,65 @@ async function run() {
       })
     })
 
+    //get events
+    app.get("/events", async (req, res) => {
+      try {
+        const {
+          status = "upcoming",
+          page = 1,
+          limit = 9,
+          type,
+          search,
+        } = req.query;
+
+        const query = {};
+
+        // status filter
+        if (status) {
+          query.status = status;
+        }
+
+        // type filter
+        if (type) {
+          query.eventType = type;
+        }
+
+        // search by title
+        if (search) {
+          query.title = {
+            $regex: search,
+            $options: "i",
+          };
+        }
+
+        const skip = (Number(page) - 1) * Number(limit);
+
+        const total = await eventCollection.countDocuments(query);
+
+        const events = await eventCollection
+          .find(query)
+          .skip(skip)
+          .limit(Number(limit))
+          .toArray();
+
+          console.log(events)
+
+        res.send({
+          success: true,
+          total,
+          totalPages: Math.ceil(total / Number(limit)),
+          events,
+        });
+      } catch (error) {
+        console.error(error);
+
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch events",
+        });
+      }
+    })
+
 
     //post method
 
