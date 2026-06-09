@@ -1258,6 +1258,36 @@ async function run() {
       }
     })
 
+    //get single event: view details
+    app.get("/events/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const event = await eventCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!event) {
+          return res.status(404).send({
+            success: false,
+            message: "Event not found",
+          });
+        }
+
+        res.send({
+          success: true,
+          event,
+        });
+      } catch (error) {
+        console.error(error);
+
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch event details",
+        });
+      }
+    });
+
 
     //post method
 
