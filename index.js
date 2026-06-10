@@ -1405,7 +1405,7 @@ async function run() {
         const registrationInfo = await eventRegistrationCollection.find(
           {eventId: new ObjectId(id), status: 'confirmed'},
           {projection:{name: 1, email:1, ageGroup:1, skills:1, status:1, 
-            paymentStatus:1, userName:1, userPhoto:1, role:1}}
+            paymentStatus:1, userName:1, userPhoto:1, role:1, tshirtSize:1}}
         ).toArray()
 
         //role count
@@ -2050,6 +2050,7 @@ async function run() {
           ageGroup,
           skills = [],
           role = "volunteer",
+          tshirtSize
         } = req.body;
 
         if (!name || !email || !phone) {
@@ -2127,6 +2128,7 @@ async function run() {
           ageGroup: ageGroup || "18-25",
           skills,
           role,
+          tshirtSize: event.isTshirt ? (tshirtSize || null) : null,
 
           qrToken,
 
