@@ -5,6 +5,7 @@ const cors = require('cors')
 const stripe = require('stripe')(process.env.stripe_secretKey)
 const { setupCommentSummaryRoute } = require('./googlegenerativeai');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { v4: uuidv4 } = require('uuid')
 
 //toxicity Checker
 const {checkToxicity} = require('./checkToxicity')
@@ -73,6 +74,7 @@ async function run() {
     const reportCollection = database.collection('report')
     const commentCollection = database.collection('comment')
     const eventCollection = database.collection('event')
+    const eventRegistrationCollection = database.collection('eventRegistration')
 
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -322,6 +324,103 @@ async function run() {
       const result = await timelineCollection.findOne({_id: new ObjectId(timelineId)})
       res.send(result)
     })
+
+    //verify event registration payment
+    app.get('/verify-event-reg-pay/:sessionId', verifyFBToken, async(req, res)=>{
+      const { sessionId } = req.params;
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.payment_status !== "paid") {
+        return res.json({
+          success: false,
+          paid: false,
+          message: "Payment not completed",
+        });
+      }
+
+      const registrationId = session.metadata?.registrationId;
+
+      if (!registrationId) {
+        return res.status(400).json({ message: "Missing registrationId" });
+      }
+
+      const registration = await eventRegistrationCollection.findOne({
+        _id: new ObjectId(registrationId),
+      });
+
+      if (!registration) {
+        return res.status(404).json({ message: "Registration not found" });
+      }
+
+      // prevent duplicate updates
+      if (registration.paymentStatus === "paid") {
+        return res.json({
+          success: true,
+          paid: true,
+          message: "Already confirmed",
+        });
+      }
+
+      const user = await userCollection.findOne({
+        _id: new ObjectId(registration.userId),
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      await eventRegistrationCollection.updateOne(
+        { _id: new ObjectId(registrationId) },
+        {
+          $set: {
+            status: "confirmed",
+            paymentStatus: "paid",
+            stripeSessionId: sessionId,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      await eventCollection.updateOne(
+        { _id: registration.eventId },
+        {
+          $inc: { volunteerCount: 1 },
+          $set: { updatedAt: new Date() },
+        }
+      );
+
+      await paymentCollection.insertOne({
+        _id: new ObjectId(),
+        userId: new ObjectId(registration.userId),
+        actionType: "event_payment",
+        title: "Event Registration Payment Successful",
+        description: `Paid ${session.amount_total / 100} BDT for event registration`,
+        performedBy: {
+          userId: new ObjectId(registration.userId),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          photoURL: user.photoURL
+        },
+        data: {
+          currency: "BDT",
+          amount: session.amount_total / 100,
+          type: session.metadata?.type || "event_registration",
+          eventId: session.metadata?.eventId,
+          registrationId: session.metadata?.registrationId,
+          stripeSessionId: session.id,
+          customerEmail: session.customer_email
+        },
+        paymentAt: new Date()
+      });
+
+      return res.json({
+        success: true,
+        paid: true,
+        message: "Payment verified successfully",
+      });
+    });
 
     //verify subscription payment
     app.get('/verify-payment/:sessionId', verifyFBToken, async(req, res) => {
@@ -1872,6 +1971,313 @@ async function run() {
         });
       }
     });
+
+    //event registration
+    app.post("/events/:id/volunteer", verifyFBToken, async (req, res) => {
+      try {
+        const eventId = new ObjectId(req.params.id);
+        const userEmail = req.decoded_email;
+        const now = new Date();
+
+        /* ───────────────── USER CHECK ───────────────── */
+        const user = await userCollection.findOne({ email: userEmail });
+        if (!user) {
+          return res.status(404).json({ message: "User not found!" });
+        }
+
+        /* ───────────────── EVENT CHECK ───────────────── */
+        const event = await eventCollection.findOne({ _id: eventId });
+
+        if (!event)
+          return res.status(404).json({ message: "Event not found" });
+
+        if (["completed", "cancelled"].includes(event.status))
+          return res.status(400).json({
+            message: "Event is no longer accepting registrations",
+          });
+
+        /* ───────────────── INPUT ───────────────── */
+        const {
+          name,
+          email,
+          phone,
+          institution,
+          ageGroup,
+          skills = [],
+          role = "volunteer",
+        } = req.body;
+
+        if (!name || !email || !phone) {
+          return res.status(400).json({
+            message: "Name, email and phone are required",
+          });
+        }
+
+        /* ───────────────── DUPLICATE CHECK ───────────────── */
+        const existing = await eventRegistrationCollection.findOne({
+          eventId,
+          userId: user._id
+        });
+
+        if (existing) {
+          return res.status(409).json({
+            message: "Already registered for this event",
+          });
+        }
+
+        /* ───────────────── CAPACITY CHECK (SAFE) ───────────────── */
+        const confirmedCount = await eventRegistrationCollection.countDocuments({
+          eventId,
+          status: "confirmed",
+        });
+
+        const isFull =
+          event.maxVolunteers &&
+          confirmedCount >= event.maxVolunteers;
+
+        const isPaidEvent = (event.registrationFee || 0) > 0;
+
+        /* ───────────────── STATUS DECISION ───────────────── */
+        let status;
+
+        if (isFull) {
+          status = "waitlisted";
+        } else if (isPaidEvent) {
+          status = "pending"; // waiting for payment confirmation
+        } else {
+          status = "confirmed"; // free event auto-confirm
+        }
+
+        const qrToken = uuidv4();
+        const registrationId = new ObjectId();
+
+        /* ───────────────── CREATE REGISTRATION ───────────────── */
+        const regDoc = {
+          _id: registrationId,
+          eventId,
+          userId: user._id,
+
+          name,
+          email,
+          phone,
+          institution: institution || "",
+          ageGroup: ageGroup || "18-25",
+          skills,
+          role,
+
+          qrToken,
+
+          status,
+          paymentStatus: isPaidEvent ? "pending" : "not-required",
+
+          stripeSessionId: null,
+          waitlistPosition: null,
+
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await eventRegistrationCollection.insertOne(regDoc);
+
+        /* ───────────────── FREE EVENT: COUNT INCREASE ───────────────── */
+        if (status === "confirmed") {
+          await eventCollection.updateOne(
+            { _id: eventId },
+            { $inc: { volunteerCount: 1 }, $set: { updatedAt: now } }
+          );
+        }
+
+        /* ───────────────── WAITLIST POSITION ───────────────── */
+        let waitlistPosition = null;
+
+        if (status === "waitlisted") {
+          const count = await eventRegistrationCollection.countDocuments({
+            eventId,
+            status: "waitlisted",
+          });
+
+          waitlistPosition = count;
+
+          await eventRegistrationCollection.updateOne(
+            { _id: registrationId },
+            { $set: { waitlistPosition } }
+          );
+        }
+
+        /* ───────────────── STRIPE SESSION ───────────────── */
+        let paymentUrl = null;
+
+        if (status === "pending") {
+          try {
+            const session = await stripe.checkout.sessions.create({
+              customer_email: email,
+
+              line_items: [
+                {
+                  price_data: {
+                    currency: "bdt",
+                    product_data: {
+                      name: event.title,
+                    },
+                    unit_amount: event.registrationFee * 100,
+                  },
+                  quantity: 1,
+                },
+              ],
+
+              mode: "payment",
+
+              success_url: `${process.env.FRONTEND_URL}/event-payment-success?session_id={CHECKOUT_SESSION_ID}`,
+
+              cancel_url: `${process.env.FRONTEND_URL}/event-payment-cancel`,
+
+              metadata: {
+                eventId: eventId.toString(),
+                registrationId: registrationId.toString(),
+                type: "event_registration",
+              },
+            });
+
+            paymentUrl = session.url;
+
+            await eventRegistrationCollection.updateOne(
+              { _id: registrationId },
+              {
+                $set: {
+                  stripeSessionId: session.id,
+                  updatedAt: now,
+                },
+              }
+            );
+          } catch (stripeErr) {
+            console.error("Stripe error:", stripeErr.message);
+
+            // ❗ FIX: prevent stuck pending state
+            await eventRegistrationCollection.updateOne(
+              { _id: registrationId },
+              {
+                $set: {
+                  status: "failed-payment",
+                  updatedAt: now,
+                },
+              }
+            );
+
+            return res.status(500).json({
+              message: "Payment system error. Please try again.",
+            });
+          }
+        }
+
+        /* ───────────────── EMAIL ───────────────── */
+        try {
+          if (status === "waitlisted") {
+            await sendWaitlistConfirmation({
+              to: email,
+              name,
+              eventTitle: event.title,
+              eventDate: event.date,
+              eventAddress: event.location?.address,
+              waitlistPosition,
+            });
+          } else if (status === "confirmed") {
+            await sendRegistrationConfirmation({
+              to: email,
+              name,
+              eventTitle: event.title,
+              eventDate: event.date,
+              eventAddress: event.location?.address,
+              eventType: event.eventType,
+              qrToken,
+              role,
+              registrationFee: event.registrationFee,
+              paymentLink: null,
+            });
+          } else if (status === "pending") {
+            await sendRegistrationConfirmation({
+              to: email,
+              name,
+              eventTitle: event.title,
+              eventDate: event.date,
+              eventAddress: event.location?.address,
+              eventType: event.eventType,
+              qrToken,
+              role,
+              registrationFee: event.registrationFee,
+              paymentLink: paymentUrl,
+            });
+          }
+        } catch (emailErr) {
+          console.error("Email error:", emailErr.message);
+        }
+
+        /* ───────────────── RESPONSE ───────────────── */
+        return res.status(201).json({
+          message:
+            status === "waitlisted"
+              ? "Added to waitlist"
+              : status === "pending"
+              ? "Proceed to payment"
+              : "Successfully registered",
+
+          registration: {
+            _id: registrationId,
+            qrToken,
+            status,
+            paymentStatus: regDoc.paymentStatus,
+            paymentUrl,
+            waitlistPosition,
+          },
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({
+          message: "Server error",
+          error: err.message,
+        });
+      }
+    });
+    
+    //event reg payment webhook
+    // app.post("/webhook/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+    //   let stripeEvent;
+    //   try {
+    //     stripeEvent = stripe.webhooks.constructEvent(
+    //       req.body,
+    //       req.headers["stripe-signature"],
+    //       process.env.STRIPE_WEBHOOK_SECRET
+    //     );
+    //   } catch (err) {
+    //     return res.status(400).send(`Webhook Error: ${err.message}`);
+    //   }
+
+    //   if (stripeEvent.type === "checkout.session.completed") {
+    //     const session        = stripeEvent.data.object;
+    //     const registrationId = new ObjectId(session.metadata?.registrationId);
+    //     const now            = new Date();
+
+    //     const reg = await eventRegistrationCollection.findOne({ _id: registrationId });
+
+    //     // Idempotency: already processed হলে skip
+    //     if (!reg || reg.status === "confirmed") return res.json({ received: true });
+
+    //     // Registration confirm করো
+    //     await eventRegistrationCollection.updateOne(
+    //       { _id: registrationId },
+    //       { $set: { status: "confirmed", paymentStatus: "paid", updatedAt: now } }
+    //     );
+
+    //     // ✅ এখন volunteerCount বাড়াও
+    //     await eventCollection.updateOne(
+    //       { _id: reg.eventId },
+    //       { $inc: { volunteerCount: 1 }, $set: { updatedAt: now } }
+    //     );
+    //   }
+
+    //   res.json({ received: true });
+    // });
+
+    //event verify session checkout
 
     //---------------------------------------------------------------------//
     //put/update method
