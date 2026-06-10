@@ -1240,7 +1240,7 @@ async function run() {
           .limit(Number(limit))
           .toArray();
 
-          console.log(events)
+          // console.log(events)
 
         res.send({
           success: true,
