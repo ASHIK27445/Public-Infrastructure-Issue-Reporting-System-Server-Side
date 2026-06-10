@@ -8,6 +8,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { v4: uuidv4 } = require('uuid')
 const { 
   sendRegistrationConfirmation, 
+  sendPaymentConfirmationEmail,
   sendWaitlistConfirmation,
   sendWaitlistPromotion,
   sendEventReminder,
@@ -397,31 +398,51 @@ async function run() {
         }
       );
 
-      // await paymentCollection.insertOne({
-      //   _id: new ObjectId(),
-      //   userId: new ObjectId(registration.userId),
-      //   actionType: "event_payment",
-      //   title: "Event Registration Payment Successful",
-      //   description: `Paid ${session.amount_total / 100} BDT for event registration`,
-      //   performedBy: {
-      //     userId: new ObjectId(registration.userId),
-      //     name: user.name,
-      //     email: user.email,
-      //     role: user.role,
-      //     photoURL: user.photoURL
-      //   },
-      //   data: {
-      //     currency: "BDT",
-      //     amount: session.amount_total / 100,
-      //     type: session.metadata?.type || "event_registration",
-      //     eventId: session.metadata?.eventId,
-      //     registrationId: session.metadata?.registrationId,
-      //     stripeSessionId: session.id,
-      //     customerEmail: session.customer_email
-      //   },
-      //   paymentAt: new Date()
-      // });
+      await paymentCollection.insertOne({
+        _id: new ObjectId(),
+        userId: new ObjectId(registration.userId),
+        actionType: "event_payment",
+        title: "Event Registration Payment Successful",
+        description: `Paid ${session.amount_total / 100} BDT for event registration`,
+        performedBy: {
+          userId: new ObjectId(registration.userId),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          photoURL: user.photoURL
+        },
+        data: {
+          currency: "BDT",
+          amount: session.amount_total / 100,
+          type: session.metadata?.type || "event_registration",
+          eventId: session.metadata?.eventId,
+          registrationId: session.metadata?.registrationId,
+          stripeSessionId: session.id,
+          customerEmail: session.customer_email
+        },
+        paymentAt: new Date()
+      });
 
+      // payment confirmation email
+      const event = await eventCollection.findOne({ _id: registration.eventId });
+
+      try {
+        await sendPaymentConfirmationEmail({
+          to: registration.email,
+          name: user.name,
+          eventTitle: event.title,
+          eventDate: event.date,
+          eventAddress: event.location?.address,
+          amount: session.amount_total / 100,
+          qrToken: registration.qrToken,
+        });
+      } catch (emailErr) {
+        console.error("Email error:", emailErr.message);
+      }
+
+      console.log("Sending email to:", user.email);
+console.log("Event:", event?.title);
+console.log("QR Token:", registration.qrToken);
       return res.json({
         success: true,
         paid: true,
@@ -2208,7 +2229,7 @@ async function run() {
               eventDate: event.date,
               eventAddress: event.location?.address,
               eventType: event.eventType,
-              qrToken,
+              qrToken: null,
               role,
               registrationFee: event.registrationFee,
               paymentLink: paymentUrl,

@@ -75,7 +75,7 @@ const baseTemplate = (content) => `
 </html>`;
 
 /* ─────────────────────────────────────────────
-   1. VOLUNTEER REGISTRATION CONFIRMATION
+   1. VOLUNTEER REGISTRATION CONFIRMATION & PAYMENT CONFIRMATION MAIL
 ───────────────────────────────────────────── */
 const sendRegistrationConfirmation = async ({
   to, name, eventTitle, eventDate, eventAddress,
@@ -100,12 +100,16 @@ const sendRegistrationConfirmation = async ({
       <div class="detail-row"><span class="detail-icon">👤</span>Registered as: <strong>${role.charAt(0).toUpperCase() + role.slice(1)}</strong></div>
     </div>
 
+    ${qrToken ? `
     <div class="qr-box">
-      <p style="margin-bottom:8px;font-weight:600;color:#111">Your Attendance QR Token</p>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance to mark attendance</p>
-      <span class="token-code">${qrToken}</span>
-      <p style="font-size:12px;color:#9ca3af;margin-top:12px">Keep this safe. One token per registration.</p>
-    </div>
+    <p style="margin-bottom:8px;font-weight:600;color:#111">Your Attendance QR Token</p>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance to mark attendance</p>
+    <span class="token-code">${qrToken}</span>
+    <p style="font-size:12px;color:#9ca3af;margin-top:12px">Keep this safe. One token per registration.</p>
+    </div>` : `
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;margin:16px 0">
+    <p style="color:#92400e;font-weight:600">⏳ QR Token will be sent after payment is confirmed.</p>
+    </div>`}
 
     ${registrationFee > 0 ? `
     <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;margin:16px 0">
@@ -139,6 +143,41 @@ const sendRegistrationConfirmation = async ({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
     subject: `✅ You're registered for "${eventTitle}"`,
+    html: baseTemplate(content),
+  });
+};
+
+const sendPaymentConfirmationEmail = async ({
+  to, name, eventTitle, eventDate, eventAddress, amount, qrToken,
+}) => {
+  const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  const content = `
+    <h1>Payment Confirmed! ✅</h1>
+    <p>Hi <strong>${name}</strong>, your payment of <strong>৳${amount}</strong> has been received and your registration is now confirmed!</p>
+
+    <div class="highlight-box">
+      <div class="detail-row"><span class="detail-icon">🎉</span><strong style="font-size:16px">${eventTitle}</strong></div>
+      <div class="detail-row"><span class="detail-icon">🗓️</span>${formattedDate}</div>
+      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
+      <div class="detail-row"><span class="detail-icon">💳</span>Amount Paid: <strong>৳${amount}</strong></div>
+    </div>
+
+    <div class="qr-box">
+      <p style="font-weight:600;color:#111;margin-bottom:6px">Your Attendance QR Token</p>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance</p>
+      <span class="token-code">${qrToken}</span>
+    </div>
+
+    <p>See you at the event! 💚</p>
+  `;
+
+  return transporter.sendMail({
+    from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
+    to,
+    subject: `✅ Payment Confirmed — "${eventTitle}"`,
     html: baseTemplate(content),
   });
 };
@@ -289,6 +328,7 @@ const sendDonorThankYou = async ({ to, name, eventTitle, amount }) => {
 
 module.exports = {
   sendRegistrationConfirmation,
+  sendPaymentConfirmationEmail,
   sendWaitlistConfirmation,
   sendWaitlistPromotion,
   sendEventReminder,
