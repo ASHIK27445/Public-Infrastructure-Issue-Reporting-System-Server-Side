@@ -390,10 +390,11 @@ async function run() {
         }
       );
 
+      const countField = registration.role === "guest" ? "guestCount" : "volunteerCount";
       await eventCollection.updateOne(
         { _id: registration.eventId },
         {
-          $inc: { volunteerCount: 1 },
+          $inc: { [countField]: 1 },
           $set: { updatedAt: new Date() },
         }
       );
@@ -441,8 +442,8 @@ async function run() {
       }
 
       console.log("Sending email to:", user.email);
-console.log("Event:", event?.title);
-console.log("QR Token:", registration.qrToken);
+      console.log("Event:", event?.title);
+      console.log("QR Token:", registration.qrToken);
       return res.json({
         success: true,
         paid: true,
@@ -1401,9 +1402,25 @@ console.log("QR Token:", registration.qrToken);
           });
         }
 
+        const registrationInfo = await eventRegistrationCollection.find(
+          {eventId: new ObjectId(id), status: 'confirmed'},
+          {projection:{name: 1, email:1, ageGroup:1, skills:1, status:1, 
+            paymentStatus:1, userName:1, userPhoto:1, role:1}}
+        ).toArray()
+
+        //role count
+        const volunteerCount = registrationInfo.filter(r => r.role === "volunteer").length;
+        const guestCount = registrationInfo.filter(r => r.role === "guest").length;
+
         res.send({
           success: true,
           event,
+          registrationInfo,
+          totalRegistredParticipate: registrationInfo.length,
+          roleCount:{
+            volunteer: volunteerCount,
+            guest: guestCount
+          }
         });
       } catch (error) {
         console.error(error);
@@ -1969,10 +1986,10 @@ console.log("QR Token:", registration.qrToken);
       const {issueId, staffId} = req.body
 
       /**-----------------Staff query----------------------------- */
-      const staff = await userCollection.findOne({_id: new ObjectId(staffId)})
-      if(!staff){
-        return res.status(404).send({message: "Staff not found!"})
-      }
+      // const staff = await userCollection.findOne({_id: new ObjectId(staffId)})
+      // if(!staff){
+      //   return res.status(404).send({message: "Staff not found!"})
+      // }
 
       try {
         const eventDoc = {
@@ -1980,7 +1997,7 @@ console.log("QR Token:", registration.qrToken);
           createdAt: new Date(),
           updatedAt: new Date(),
           status: "upcoming",
-          volunteersJoined: 0
+          guestCount: 0
         };
 
         const result = await eventCollection.insertOne(eventDoc);
@@ -2053,7 +2070,7 @@ console.log("QR Token:", registration.qrToken);
           });
         }
 
-        /* ───────────────── CAPACITY CHECK (SAFE) ───────────────── */
+        /* ───────────────── CAPACITY CHECK ───────────────── */
         const confirmedCount = await eventRegistrationCollection.countDocuments({
           eventId,
           status: "confirmed",
@@ -2064,6 +2081,23 @@ console.log("QR Token:", registration.qrToken);
           confirmedCount >= event.maxVolunteers;
 
         const isPaidEvent = (event.registrationFee || 0) > 0;
+
+        /* ───────────────── GUEST CAPACITY CHECK ───────────────── */
+        if (role === "guest") {
+          if (!event.isGuestUnlimited) {
+            const guestCount = await eventRegistrationCollection.countDocuments({
+              eventId,
+              status: "confirmed",
+              role: "guest",
+            });
+
+            if (guestCount >= (event.guestNumber || 0)) {
+              return res.status(400).json({
+                message: "Guest spots are full for this event",
+              });
+            }
+          }
+        }
 
         /* ───────────────── STATUS DECISION ───────────────── */
         let status;
@@ -2084,7 +2118,8 @@ console.log("QR Token:", registration.qrToken);
           _id: registrationId,
           eventId,
           userId: user._id,
-
+          userPhoto: user.photoURL,
+          userName: user.name,
           name,
           email,
           phone,
@@ -2109,9 +2144,10 @@ console.log("QR Token:", registration.qrToken);
 
         /* ───────────────── FREE EVENT: COUNT INCREASE ───────────────── */
         if (status === "confirmed") {
+          const countField = role === "guest" ? "guestCount" : "volunteerCount"; // ✅
           await eventCollection.updateOne(
             { _id: eventId },
-            { $inc: { volunteerCount: 1 }, $set: { updatedAt: now } }
+            { $inc: { [countField]: 1 }, $set: { updatedAt: now } }
           );
         }
 
