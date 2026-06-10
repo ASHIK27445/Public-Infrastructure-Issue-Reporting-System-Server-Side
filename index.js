@@ -6,6 +6,13 @@ const stripe = require('stripe')(process.env.stripe_secretKey)
 const { setupCommentSummaryRoute } = require('./googlegenerativeai');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { v4: uuidv4 } = require('uuid')
+const { 
+  sendRegistrationConfirmation, 
+  sendWaitlistConfirmation,
+  sendWaitlistPromotion,
+  sendEventReminder,
+  sendDonorThankYou
+} = require("./emailService")
 
 //toxicity Checker
 const {checkToxicity} = require('./checkToxicity')
@@ -390,30 +397,30 @@ async function run() {
         }
       );
 
-      await paymentCollection.insertOne({
-        _id: new ObjectId(),
-        userId: new ObjectId(registration.userId),
-        actionType: "event_payment",
-        title: "Event Registration Payment Successful",
-        description: `Paid ${session.amount_total / 100} BDT for event registration`,
-        performedBy: {
-          userId: new ObjectId(registration.userId),
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          photoURL: user.photoURL
-        },
-        data: {
-          currency: "BDT",
-          amount: session.amount_total / 100,
-          type: session.metadata?.type || "event_registration",
-          eventId: session.metadata?.eventId,
-          registrationId: session.metadata?.registrationId,
-          stripeSessionId: session.id,
-          customerEmail: session.customer_email
-        },
-        paymentAt: new Date()
-      });
+      // await paymentCollection.insertOne({
+      //   _id: new ObjectId(),
+      //   userId: new ObjectId(registration.userId),
+      //   actionType: "event_payment",
+      //   title: "Event Registration Payment Successful",
+      //   description: `Paid ${session.amount_total / 100} BDT for event registration`,
+      //   performedBy: {
+      //     userId: new ObjectId(registration.userId),
+      //     name: user.name,
+      //     email: user.email,
+      //     role: user.role,
+      //     photoURL: user.photoURL
+      //   },
+      //   data: {
+      //     currency: "BDT",
+      //     amount: session.amount_total / 100,
+      //     type: session.metadata?.type || "event_registration",
+      //     eventId: session.metadata?.eventId,
+      //     registrationId: session.metadata?.registrationId,
+      //     stripeSessionId: session.id,
+      //     customerEmail: session.customer_email
+      //   },
+      //   paymentAt: new Date()
+      // });
 
       return res.json({
         success: true,
@@ -1952,7 +1959,7 @@ async function run() {
           createdAt: new Date(),
           updatedAt: new Date(),
           status: "upcoming",
-          volunteersJoined: 0,
+          volunteersJoined: 0
         };
 
         const result = await eventCollection.insertOne(eventDoc);
