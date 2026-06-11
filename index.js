@@ -407,9 +407,24 @@ async function run() {
 
         await paymentCollection.insertOne({
           _id: new ObjectId(),
+          userId: donation.userId || null,
           actionType: "event_donation",
           title: "Event Donation Payment Successful",
           description: `Donated ${donation.amount} BDT to event`,
+          performedBy: donation.anonymous ? {
+            role: "anonymous",
+            name: 'Anonymous',
+            userId: 'anonymous',
+            photoURL: null,
+            email: donation.donorEmail || null,
+            phone: donation.donorPhone || null,
+          } : {
+            userId: donation.userId || null,
+            name: donation.donorName,
+            email: donation.donorEmail || null,
+            photoURL: donation.userPhoto || null,
+            role: "citizen",
+          },
           data: {
             currency: "BDT",
             amount: donation.amount,
