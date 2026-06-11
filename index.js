@@ -83,6 +83,7 @@ async function run() {
     const commentCollection = database.collection('comment')
     const eventCollection = database.collection('event')
     const eventRegistrationCollection = database.collection('eventRegistration')
+    const donationCollection = database.collection('donation')
 
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -332,6 +333,102 @@ async function run() {
       const result = await timelineCollection.findOne({_id: new ObjectId(timelineId)})
       res.send(result)
     })
+
+    //verify event donation payment
+    app.get("/verify-donation/:sessionId", async (req, res) => {
+      try {
+        const { sessionId } = req.params;
+
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+        if (session.payment_status !== "paid") {
+          return res.json({
+            success: false,
+            paid: false,
+            message: "Payment not completed",
+          });
+        }
+
+        const donationId = session.metadata?.donationId;
+
+        if (!donationId) {
+          return res.status(400).json({ message: "Missing donationId" });
+        }
+
+        const donation = await donationCollection.findOne({
+          _id: new ObjectId(donationId),
+        });
+
+        if (!donation) {
+          return res.status(404).json({ message: "Donation not found" });
+        }
+
+        if (donation.paymentStatus === "paid") {
+          return res.json({ success: true, paid: true, message: "Already confirmed" });
+        }
+
+        await donationCollection.updateOne(
+          { _id: new ObjectId(donationId) },
+          {
+            $set: {
+              paymentStatus: "paid",
+              stripeSessionId: sessionId,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        await eventCollection.updateOne(
+          { _id: donation.eventId },
+          {
+            $inc: { fundRaised: donation.amount },
+            $set: { updatedAt: new Date() },
+          }
+        );
+
+        await paymentCollection.insertOne({
+          _id: new ObjectId(),
+          actionType: "event_donation",
+          title: "Event Donation Payment Successful",
+          description: `Donated ${donation.amount} BDT to event`,
+          data: {
+            currency: "BDT",
+            amount: donation.amount,
+            type: "event_donation",
+            eventId: session.metadata?.eventId,
+            donationId: session.metadata?.donationId,
+            stripeSessionId: session.id,
+            customerEmail: session.customer_email,
+            anonymous: donation.anonymous,
+          },
+          paymentAt: new Date(),
+        });
+
+        if (donation.wantReceipt && donation.donorEmail) {
+          try {
+            const event = await eventCollection.findOne({ _id: donation.eventId });
+            await sendDonorThankYou({
+              to: donation.donorEmail,
+              name: donation.anonymous ? "Donor" : donation.donorName,
+              eventTitle: event?.title,
+              amount: donation.amount,
+            });
+          } catch (emailErr) {
+            console.error("Email error:", emailErr.message);
+          }
+        }
+
+        return res.json({
+          success: true,
+          paid: true,
+          message: "Donation verified successfully",
+        });
+
+      } catch (err) {
+        console.error("Verify donation error:", err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
 
     //verify event registration payment
     app.get('/verify-event-reg-pay/:sessionId', verifyFBToken, async(req, res)=>{
@@ -2344,6 +2441,111 @@ async function run() {
     // });
 
     //event verify session checkout
+
+    //event donation
+
+
+    app.post("/events/:id/donate", async (req, res) => {
+      try {
+        const eventId = new ObjectId(req.params.id);
+        const {
+          amount,
+          donorName = "Supporter",
+          donorEmail,
+          donorPhone,
+          anonymous,
+          wantReceipt,
+        } = req.body;
+
+        if (!amount || Number(amount) < 10) {
+          return res.status(400).json({ message: "Minimum donation is ৳10" });
+        }
+
+        // if Anonymous then email or phone must needed
+        if (anonymous && !donorEmail && !donorPhone) {
+          return res.status(400).json({
+            message: "Anonymous donation requires at least an email or phone",
+          });
+        }
+
+        const event = await eventCollection.findOne({ _id: eventId });
+        if (!event) {
+          return res.status(404).json({ message: "Event not found" });
+        }
+
+        if (event.status === "cancelled") {
+          return res.status(400).json({ message: "Cannot donate to a cancelled event" });
+        }
+
+        if (event.status === "completed") {
+          return res.status(400).json({ message: "Cannot donate to a completed event" });
+        }
+
+        if (!event.fundGoal || event.fundGoal <= 0) {
+          return res.status(400).json({ message: "This event is not accepting donations" });
+        }
+
+        // Donation record 
+        const donationId = new ObjectId();
+        const donationDoc = {
+          _id: donationId,
+          eventId,
+          amount: Number(amount),
+          donorName: anonymous ? "Anonymous" : donorName,
+          donorEmail: donorEmail || null,
+          donorPhone: donorPhone || null,
+          anonymous,
+          wantReceipt: wantReceipt || false,
+          paymentStatus: "pending",
+          stripeSessionId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await donationCollection.insertOne(donationDoc);
+
+        // Stripe session create
+        const session = await stripe.checkout.sessions.create({
+          customer_email: donorEmail || undefined,
+
+          line_items: [
+            {
+              price_data: {
+                currency: "bdt",
+                product_data: {
+                  name: `Donation — ${event.title}`,
+                },
+                unit_amount: Number(amount) * 100,
+              },
+              quantity: 1,
+            },
+          ],
+
+          mode: "payment",
+
+          success_url: `${process.env.FRONTEND_URL}/events/${eventId}?donated=true&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.FRONTEND_URL}/events/${eventId}`,
+
+          metadata: {
+            donationId: donationId.toString(),
+            eventId: eventId.toString(),
+            type: "event_donation",
+          },
+        });
+
+        // Save Session ID
+        await donationCollection.updateOne(
+          { _id: donationId },
+          { $set: { stripeSessionId: session.id, updatedAt: new Date() } }
+        );
+
+        return res.json({ success: true, paymentUrl: session.url });
+
+      } catch (err) {
+        console.error("Donation error:", err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
 
     //---------------------------------------------------------------------//
     //put/update method
