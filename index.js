@@ -51,6 +51,25 @@ const verifyFBToken = async (req, res, next) => {
   }
 }
 
+const optionalFBToken = async (req, res, next) => {
+  const token = req.headers.authorization;
+
+  if (!token) {
+    req.decoded_email = null;
+    return next(); // ✅ token না থাকলেও proceed
+  }
+
+  try {
+    const idToken = token.split(' ')[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    req.decoded_email = decoded.email;
+    next();
+  } catch (err) {
+    req.decoded_email = null;
+    next(); // ✅ token invalid হলেও proceed
+  }
+}
+
 //comments insight generaTIVE GOOGLE AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -1509,6 +1528,10 @@ async function run() {
         const volunteerCount = registrationInfo.filter(r => r.role === "volunteer").length;
         const guestCount = registrationInfo.filter(r => r.role === "guest").length;
 
+        const donations = await donationCollection
+        .find({ eventId: new ObjectId(id), paymentStatus: "paid" })
+        .toArray();
+
         res.send({
           success: true,
           event,
@@ -1517,7 +1540,8 @@ async function run() {
           roleCount:{
             volunteer: volunteerCount,
             guest: guestCount
-          }
+          },
+          donations
         });
       } catch (error) {
         console.error(error);
@@ -2445,7 +2469,17 @@ async function run() {
     //event donation
 
 
-    app.post("/events/:id/donate", async (req, res) => {
+    app.post("/events/:id/donate", optionalFBToken, async (req, res) => {
+      let userId = null;
+      let userPhoto = null;
+
+      if (req.decoded_email) {
+        const user = await userCollection.findOne({ email: req.decoded_email });
+        if (user) {
+          userId = user._id;
+          userPhoto = user.photoURL || null; // ✅
+        }
+      }
       try {
         const eventId = new ObjectId(req.params.id);
         const {
@@ -2490,6 +2524,8 @@ async function run() {
         const donationDoc = {
           _id: donationId,
           eventId,
+          userId,
+          userPhoto,
           amount: Number(amount),
           donorName: anonymous ? "Anonymous" : donorName,
           donorEmail: donorEmail || null,
