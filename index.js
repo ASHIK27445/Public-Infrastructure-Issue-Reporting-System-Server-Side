@@ -904,9 +904,11 @@ async function run() {
       const {paymentId} = req.params
       const result = await paymentCollection.findOne({_id: new ObjectId(paymentId)})
       // console.log(result.userId.toString() === user._id.toString())
-      if(result.userId.toString() === user._id.toString() || user.role === 'admin'){
-        res.send(result)
-      }
+      if(user.role === 'admin' || (result.userId && result.userId.toString() === user._id.toString())) {
+          res.send(result)
+        } else {
+          res.status(403).send({message: "Forbidden"})
+        }
     })
 
     //get all upvotes
