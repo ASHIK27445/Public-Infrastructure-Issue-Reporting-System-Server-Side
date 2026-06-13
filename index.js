@@ -2356,7 +2356,7 @@ async function run() {
           ageGroup,
           skills = [],
           role = "volunteer",
-          tshirtSize
+          tshirtSize,
         } = req.body;
 
         if (!name || !email || !phone) {
@@ -2368,10 +2368,273 @@ async function run() {
         /* ───────────────── DUPLICATE CHECK ───────────────── */
         const existing = await eventRegistrationCollection.findOne({
           eventId,
-          userId: user._id
+          userId: user._id,
         });
 
         if (existing) {
+          /* ── waitlisted volunteer → guest switch ── */
+          if (
+            existing.status === "waitlisted" &&
+            existing.role !== "guest" &&
+            role === "guest"
+          ) {
+            // guest capacity check
+            if (!event.isGuestUnlimited) {
+              const guestCount = await eventRegistrationCollection.countDocuments({
+                eventId,
+                status: "confirmed",
+                role: "guest",
+              });
+              if (guestCount >= (event.guestNumber || 0)) {
+                return res.status(400).json({
+                  message: "Guest spots are also full",
+                });
+              }
+            }
+
+            const isPaidEvent = (event.registrationFee || 0) > 0;
+            const qrToken = uuidv4();
+
+            await eventRegistrationCollection.updateOne(
+              { _id: existing._id },
+              {
+                $set: {
+                  role: "guest",
+                  status: isPaidEvent ? "pending" : "confirmed",
+                  paymentStatus: isPaidEvent ? "pending" : "not-required",
+                  qrToken: isPaidEvent ? null : qrToken,
+                  waitlistPosition: null,
+                  name,
+                  phone,
+                  institution: institution || "",
+                  ageGroup: ageGroup || "18-25",
+                  skills,
+                  tshirtSize: event.isTshirt ? (tshirtSize || null) : null,
+                  updatedAt: now,
+                },
+              }
+            );
+
+            // free → guestCount বাড়াও
+            if (!isPaidEvent) {
+              await eventCollection.updateOne(
+                { _id: eventId },
+                { $inc: { guestCount: 1 }, $set: { updatedAt: now } }
+              );
+            }
+
+            // paid → stripe session
+            let paymentUrl = null;
+            if (isPaidEvent) {
+              try {
+                const session = await stripe.checkout.sessions.create({
+                  customer_email: email,
+                  line_items: [
+                    {
+                      price_data: {
+                        currency: "bdt",
+                        product_data: { name: event.title },
+                        unit_amount: event.registrationFee * 100,
+                      },
+                      quantity: 1,
+                    },
+                  ],
+                  mode: "payment",
+                  success_url: `${process.env.FRONTEND_URL}/event-payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                  cancel_url: `${process.env.FRONTEND_URL}/event-payment-cancel`,
+                  metadata: {
+                    eventId: eventId.toString(),
+                    registrationId: existing._id.toString(),
+                    type: "event_registration",
+                  },
+                });
+
+                paymentUrl = session.url;
+
+                await eventRegistrationCollection.updateOne(
+                  { _id: existing._id },
+                  { $set: { stripeSessionId: session.id, updatedAt: now } }
+                );
+              } catch (stripeErr) {
+                console.error("Stripe error:", stripeErr.message);
+                await eventRegistrationCollection.updateOne(
+                  { _id: existing._id },
+                  { $set: { status: "failed-payment", updatedAt: now } }
+                );
+                return res.status(500).json({ message: "Payment system error. Please try again." });
+              }
+            }
+
+            // email
+            try {
+              if (!isPaidEvent) {
+                await sendRegistrationConfirmation({
+                  to: email,
+                  name,
+                  eventTitle: event.title,
+                  eventDate: event.date,
+                  eventAddress: event.location?.address,
+                  eventType: event.eventType,
+                  qrToken,
+                  role: "guest",
+                  registrationFee: 0,
+                  paymentLink: null,
+                });
+              } else {
+                await sendRegistrationConfirmation({
+                  to: email,
+                  name,
+                  eventTitle: event.title,
+                  eventDate: event.date,
+                  eventAddress: event.location?.address,
+                  eventType: event.eventType,
+                  qrToken: null,
+                  role: "guest",
+                  registrationFee: event.registrationFee,
+                  paymentLink: paymentUrl,
+                });
+              }
+            } catch (emailErr) {
+              console.error("Email error:", emailErr.message);
+            }
+
+            return res.status(200).json({
+              message: isPaidEvent ? "Proceed to payment" : "Switched to guest successfully",
+              registration: {
+                _id: existing._id,
+                qrToken: isPaidEvent ? null : qrToken,
+                status: isPaidEvent ? "pending" : "confirmed",
+                paymentStatus: isPaidEvent ? "pending" : "not-required",
+                paymentUrl,
+                waitlistPosition: null,
+              },
+            });
+          }
+
+          if (
+            existing.status === "waitlisted" &&
+            existing.role === "guest" &&
+            role === "volunteer"
+          ) {
+            // volunteer capacity check
+            const volunteerCount = await eventRegistrationCollection.countDocuments({
+              eventId,
+              status: "confirmed",
+              role: { $ne: "guest" },
+            });
+
+            if (event.maxVolunteers && volunteerCount >= event.maxVolunteers) {
+              return res.status(400).json({
+                message: "Volunteer spots are also full",
+              });
+            }
+
+            const isPaidEvent = (event.registrationFee || 0) > 0;
+            const qrToken = uuidv4();
+
+            await eventRegistrationCollection.updateOne(
+              { _id: existing._id },
+              {
+                $set: {
+                  role: "volunteer",
+                  status: isPaidEvent ? "pending" : "confirmed",
+                  paymentStatus: isPaidEvent ? "pending" : "not-required",
+                  qrToken: isPaidEvent ? null : qrToken,
+                  waitlistPosition: null,
+                  name,
+                  phone,
+                  institution: institution || "",
+                  ageGroup: ageGroup || "18-25",
+                  skills,
+                  tshirtSize: event.isTshirt ? (tshirtSize || null) : null,
+                  updatedAt: now,
+                },
+              }
+            );
+
+            // free → volunteerCount বাড়াও
+            if (!isPaidEvent) {
+              await eventCollection.updateOne(
+                { _id: eventId },
+                { $inc: { volunteerCount: 1 }, $set: { updatedAt: now } }
+              );
+            }
+
+            // paid → stripe session
+            let paymentUrl = null;
+            if (isPaidEvent) {
+              try {
+                const session = await stripe.checkout.sessions.create({
+                  customer_email: email,
+                  line_items: [
+                    {
+                      price_data: {
+                        currency: "bdt",
+                        product_data: { name: event.title },
+                        unit_amount: event.registrationFee * 100,
+                      },
+                      quantity: 1,
+                    },
+                  ],
+                  mode: "payment",
+                  success_url: `${process.env.FRONTEND_URL}/event-payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                  cancel_url: `${process.env.FRONTEND_URL}/event-payment-cancel`,
+                  metadata: {
+                    eventId: eventId.toString(),
+                    registrationId: existing._id.toString(),
+                    type: "event_registration",
+                  },
+                });
+
+                paymentUrl = session.url;
+
+                await eventRegistrationCollection.updateOne(
+                  { _id: existing._id },
+                  { $set: { stripeSessionId: session.id, updatedAt: now } }
+                );
+              } catch (stripeErr) {
+                console.error("Stripe error:", stripeErr.message);
+                await eventRegistrationCollection.updateOne(
+                  { _id: existing._id },
+                  { $set: { status: "failed-payment", updatedAt: now } }
+                );
+                return res.status(500).json({ message: "Payment system error. Please try again." });
+              }
+            }
+
+            // email
+            try {
+              await sendRegistrationConfirmation({
+                to: email,
+                name,
+                eventTitle: event.title,
+                eventDate: event.date,
+                eventAddress: event.location?.address,
+                eventType: event.eventType,
+                qrToken: isPaidEvent ? null : qrToken,
+                role: "volunteer",
+                registrationFee: event.registrationFee,
+                paymentLink: isPaidEvent ? paymentUrl : null,
+              });
+            } catch (emailErr) {
+              console.error("Email error:", emailErr.message);
+            }
+
+            return res.status(200).json({
+              message: isPaidEvent ? "Proceed to payment" : "Switched to volunteer successfully",
+              registration: {
+                _id: existing._id,
+                qrToken: isPaidEvent ? null : qrToken,
+                status: isPaidEvent ? "pending" : "confirmed",
+                paymentStatus: isPaidEvent ? "pending" : "not-required",
+                paymentUrl,
+                waitlistPosition: null,
+              },
+            });
+          }
+
+
+          
           return res.status(409).json({
             message: "Already registered for this event",
           });
@@ -2379,7 +2642,6 @@ async function run() {
 
         /* ───────────────── CAPACITY CHECK ───────────────── */
         const isPaidEvent = (event.registrationFee || 0) > 0;
-
         let isFull = false;
 
         if (role === "guest") {
@@ -2396,7 +2658,6 @@ async function run() {
             }
           }
         } else {
-          // volunteer / organizer etc.
           const volunteerCount = await eventRegistrationCollection.countDocuments({
             eventId,
             status: "confirmed",
@@ -2411,9 +2672,9 @@ async function run() {
         if (isFull) {
           status = "waitlisted";
         } else if (isPaidEvent) {
-          status = "pending"; // waiting for payment confirmation
+          status = "pending";
         } else {
-          status = "confirmed"; // free event auto-confirm
+          status = "confirmed";
         }
 
         const qrToken = uuidv4();
@@ -2451,7 +2712,7 @@ async function run() {
 
         /* ───────────────── FREE EVENT: COUNT INCREASE ───────────────── */
         if (status === "confirmed") {
-          const countField = role === "guest" ? "guestCount" : "volunteerCount"; // ✅
+          const countField = role === "guest" ? "guestCount" : "volunteerCount";
           await eventCollection.updateOne(
             { _id: eventId },
             { $inc: { [countField]: 1 }, $set: { updatedAt: now } }
@@ -2482,26 +2743,19 @@ async function run() {
           try {
             const session = await stripe.checkout.sessions.create({
               customer_email: email,
-
               line_items: [
                 {
                   price_data: {
                     currency: "bdt",
-                    product_data: {
-                      name: event.title,
-                    },
+                    product_data: { name: event.title },
                     unit_amount: event.registrationFee * 100,
                   },
                   quantity: 1,
                 },
               ],
-
               mode: "payment",
-
               success_url: `${process.env.FRONTEND_URL}/event-payment-success?session_id={CHECKOUT_SESSION_ID}`,
-
               cancel_url: `${process.env.FRONTEND_URL}/event-payment-cancel`,
-
               metadata: {
                 eventId: eventId.toString(),
                 registrationId: registrationId.toString(),
@@ -2513,25 +2767,14 @@ async function run() {
 
             await eventRegistrationCollection.updateOne(
               { _id: registrationId },
-              {
-                $set: {
-                  stripeSessionId: session.id,
-                  updatedAt: now,
-                },
-              }
+              { $set: { stripeSessionId: session.id, updatedAt: now } }
             );
           } catch (stripeErr) {
             console.error("Stripe error:", stripeErr.message);
 
-            // ❗ FIX: prevent stuck pending state
             await eventRegistrationCollection.updateOne(
               { _id: registrationId },
-              {
-                $set: {
-                  status: "failed-payment",
-                  updatedAt: now,
-                },
-              }
+              { $set: { status: "failed-payment", updatedAt: now } }
             );
 
             return res.status(500).json({
