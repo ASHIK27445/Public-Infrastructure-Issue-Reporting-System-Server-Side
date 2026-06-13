@@ -10,10 +10,11 @@ const {
   sendRegistrationConfirmation, 
   sendPaymentConfirmationEmail,
   sendFreeRegistrationConfirmationEmail,
+  sendFreeParticipationConfirmation,
   sendWaitlistConfirmation,
   sendWaitlistPromotion,
   sendEventReminder,
-  sendDonorThankYo
+  sendDonorThankYou
 } = require("./emailService")
 
 //toxicity Checker
@@ -104,6 +105,7 @@ async function run() {
     const eventCollection = database.collection('event')
     const eventRegistrationCollection = database.collection('eventRegistration')
     const donationCollection = database.collection('donation')
+    const freeParticipateCollection = database.collection('participants')
 
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -2984,7 +2986,9 @@ async function run() {
             eventAddress: event.location?.address,
             qrToken,
           });
+          console.log(email)
         } catch (emailErr) {
+          console.log(emailErr)
           console.error("Email error:", emailErr.message);
         }
 
