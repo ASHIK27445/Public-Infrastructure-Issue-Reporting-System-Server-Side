@@ -610,6 +610,18 @@ async function run() {
           }
         );
 
+        // if paid event confirm payment then waitlist position update
+        if (registration.waitlistPosition !== null) {
+          await eventRegistrationCollection.updateMany(
+            {
+              eventId: registration.eventId,
+              status: "waitlisted",
+              waitlistPosition: { $gt: registration.waitlistPosition },
+            },
+            { $inc: { waitlistPosition: -1 } }
+          );
+        }
+
         await paymentCollection.insertOne({
           _id: new ObjectId(),
           userId: new ObjectId(registration.userId),
@@ -2421,17 +2433,17 @@ async function run() {
                 { _id: eventId },
                 { $inc: { guestCount: 1 }, $set: { updatedAt: now } }
               );
-            }
 
-            //update waiting position
-            await eventRegistrationCollection.updateMany(
-              {
-                eventId,
-                status: "waitlisted",
-                waitlistPosition: { $gt: existing.waitlistPosition }, // greater than, not gte
-              },
-              { $inc: { waitlistPosition: -1 } }
-            );
+              //update waiting position
+              await eventRegistrationCollection.updateMany(
+                {
+                  eventId,
+                  status: "waitlisted",
+                  waitlistPosition: { $gt: existing.waitlistPosition }, // greater than, not gte
+                },
+                { $inc: { waitlistPosition: -1 } }
+              );
+            }
 
             // paid → stripe session
             let paymentUrl = null;
@@ -2568,16 +2580,20 @@ async function run() {
                 { _id: eventId },
                 { $inc: { volunteerCount: 1 }, $set: { updatedAt: now } }
               );
+
+
+              //change waiting postion
+              await eventRegistrationCollection.updateMany(
+                {
+                  eventId,
+                  status: "waitlisted",
+                  waitlistPosition: { $gt: existing.waitlistPosition }, //greater than, not gte
+                },
+                { $inc: { waitlistPosition: -1 } }
+              );
             }
 
-            await eventRegistrationCollection.updateMany(
-              {
-                eventId,
-                status: "waitlisted",
-                waitlistPosition: { $gt: existing.waitlistPosition }, //greater than, not gte
-              },
-              { $inc: { waitlistPosition: -1 } }
-            );
+
 
             // paid → stripe session
             let paymentUrl = null;
