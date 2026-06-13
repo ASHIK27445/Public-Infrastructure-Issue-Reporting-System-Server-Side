@@ -254,9 +254,10 @@ const sendPaymentConfirmationEmail = async ({
     </div>
 
     <div class="qr-box">
-      <p style="font-weight:600;color:#111;margin-bottom:6px">Your Attendance QR Token</p>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance</p>
-      <span class="token-code">${qrToken}</span>
+    <p style="margin-bottom:8px;font-weight:600;color:#111">Your Attendance QR Token</p>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance to mark attendance</p>
+    <span class="token-code">${qrToken}</span>
+    <p style="font-size:12px;color:#9ca3af;margin-top:12px">Keep this safe. One token per registration.</p>
     </div>
 
     <p>See you at the event! 💚</p>
