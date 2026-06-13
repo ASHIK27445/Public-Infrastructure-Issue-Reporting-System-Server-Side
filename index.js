@@ -2423,6 +2423,16 @@ async function run() {
               );
             }
 
+            //update waiting position
+            await eventRegistrationCollection.updateMany(
+              {
+                eventId,
+                status: "waitlisted",
+                waitlistPosition: { $gt: existing.waitlistPosition }, // greater than, not gte
+              },
+              { $inc: { waitlistPosition: -1 } }
+            );
+
             // paid → stripe session
             let paymentUrl = null;
             if (isPaidEvent) {
@@ -2476,7 +2486,7 @@ async function run() {
                   eventDate: event.date,
                   eventAddress: event.location?.address,
                   eventType: event.eventType,
-                  qrToken,
+                  qrToken: existing.qrToken,
                   role: "guest",
                   registrationFee: 0,
                   paymentLink: null,
@@ -2503,7 +2513,7 @@ async function run() {
               message: isPaidEvent ? "Proceed to payment" : "Switched to guest successfully",
               registration: {
                 _id: existing._id,
-                qrToken: qrToken,
+                qrToken: existing.qrToken,
                 status: isPaidEvent ? "pending" : "confirmed",
                 paymentStatus: isPaidEvent ? "pending" : "not-required",
                 paymentUrl,
@@ -2560,6 +2570,15 @@ async function run() {
               );
             }
 
+            await eventRegistrationCollection.updateMany(
+              {
+                eventId,
+                status: "waitlisted",
+                waitlistPosition: { $gt: existing.waitlistPosition }, //greater than, not gte
+              },
+              { $inc: { waitlistPosition: -1 } }
+            );
+
             // paid → stripe session
             let paymentUrl = null;
             if (isPaidEvent) {
@@ -2612,7 +2631,7 @@ async function run() {
                   eventDate: event.date,
                   eventAddress: event.location?.address,
                   eventType: event.eventType,
-                  qrToken: qrToken,
+                  qrToken: existing.qrToken,
                   role: "volunteer",
                 });
               } else {
@@ -2637,7 +2656,7 @@ async function run() {
               message: isPaidEvent ? "Proceed to payment" : "Switched to volunteer successfully",
               registration: {
                 _id: existing._id,
-                qrToken: qrToken,
+                qrToken: existing.qrToken,
                 status: isPaidEvent ? "pending" : "confirmed",
                 paymentStatus: isPaidEvent ? "pending" : "not-required",
                 paymentUrl,
