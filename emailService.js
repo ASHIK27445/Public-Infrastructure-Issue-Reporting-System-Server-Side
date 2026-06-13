@@ -215,164 +215,125 @@ const sendRegistrationConfirmation = async ({
   to, name, eventTitle, eventDate, eventAddress,
   eventType, qrToken, role, registrationFee, paymentLink,
 }) => {
-  const typeEmoji = { cleanup:"🧹", plantation:"🌳", repair:"🏗️", awareness:"📢", student:"🎓", meetup:"🤝" }[eventType] || "🤝";
+  const typeEmoji = {
+    cleanup:"🧹", plantation:"🌳", repair:"🏗️",
+    awareness:"📢", student:"🎓", meetup:"🤝"
+  }[eventType] || "🤝";
+
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
+
   const formattedTime = new Date(eventDate).toLocaleTimeString("en-BD", {
     hour: "2-digit", minute: "2-digit",
   });
 
   const content = `
-    <h1>You're registered! 🎉</h1>
-    <p>Hi <strong>${name}</strong>, your spot as a <strong>${role}</strong> has been confirmed for the following event:</p>
+    <h1>You're registered</h1>
+    <p>Hi <strong>${name}</strong>, your spot as <strong>${role}</strong> is confirmed.</p>
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">${typeEmoji}</span><strong style="font-size:16px">${eventTitle}</strong></div>
-      <div class="detail-row"><span class="detail-icon">🗓️</span>${formattedDate} at ${formattedTime}</div>
-      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
-      <div class="detail-row"><span class="detail-icon">👤</span>Registered as: <strong>${role.charAt(0).toUpperCase() + role.slice(1)}</strong></div>
+    <div class="card">
+      <p class="muted">Event</p>
+      <p style="margin-top:8px;font-weight:600;">
+        ${typeEmoji} ${eventTitle}
+      </p>
+      <p style="margin-top:6px;">📅 ${formattedDate} • ${formattedTime}</p>
+      <p>📍 ${eventAddress}</p>
+      <p>👤 Role: ${role}</p>
     </div>
 
     ${qrToken ? `
-    <div class="qr-box">
-    <p style="margin-bottom:8px;font-weight:600;color:#111">Your Attendance QR Token</p>
-    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance to mark attendance</p>
-    <span class="token-code">${qrToken}</span>
-    <p style="font-size:12px;color:#9ca3af;margin-top:12px">Keep this safe. One token per registration.</p>
-    </div>` : `
-    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;margin:16px 0">
-    <p style="color:#92400e;font-weight:600">⏳ QR Token will be sent after payment is confirmed.</p>
-    </div>`}
+      <div class="card" style="text-align:center;">
+        <p class="muted">Attendance QR</p>
+        <div style="font-family:monospace;font-size:14px;font-weight:600;color:#16a34a;margin-top:10px;">
+          ${qrToken}
+        </div>
+      </div>
+    ` : `
+      <p class="muted">QR will be sent after confirmation.</p>
+    `}
 
     ${registrationFee > 0 ? `
-    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;margin:16px 0">
-      <p style="color:#92400e;font-weight:600;margin-bottom:6px">💳 Payment Required — ৳${registrationFee}</p>
-      <p style="font-size:13px;color:#92400e;margin-bottom:12px">Complete payment within 24 hours to secure your spot.</p>
-      <a href="${paymentLink}" class="btn" style="background:#d97706">Pay ৳${registrationFee} Now</a>
-    </div>` : `
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin:16px 0">
-      <p style="color:#166534;font-weight:600">✅ Free Registration — No payment needed!</p>
-    </div>`}
+      <div class="card">
+        <p class="muted">Payment required</p>
+        <p style="margin-top:8px;font-weight:600;">৳${registrationFee}</p>
 
-    <div class="divider"></div>
-    <p style="font-weight:600;margin-bottom:16px">What to do next:</p>
-    <div class="steps">
-      <div class="step-item">
-        <div class="step-num">1</div>
-        <div class="step-text">Save this email and bring your QR token (printed or on phone) on event day.</div>
+        <div style="text-align:center;margin-top:14px;">
+          <a href="${paymentLink}" class="btn">
+            Pay now
+          </a>
+        </div>
       </div>
-      <div class="step-item">
-        <div class="step-num">2</div>
-        <div class="step-text">${registrationFee > 0 ? `Complete your payment of ৳${registrationFee} using the button above.` : "Show up on time — your spot is confirmed!"}</div>
+    ` : `
+      <div class="card">
+        <p style="color:#16a34a;font-weight:600;margin:0;">
+          Free registration confirmed
+        </p>
       </div>
-      <div class="step-item">
-        <div class="step-num">3</div>
-        <div class="step-text">After attending, you will receive a digital certificate sent to this email.</div>
-      </div>
-    </div>
+    `}
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `✅ You're registered for "${eventTitle}"`,
+    subject: `You're registered — ${eventTitle}`,
     html: baseTemplate(content),
   });
 };
 
 const sendFreeRegistrationConfirmationEmail = async ({
-  to,
-  name,
-  eventTitle,
-  eventDate,
-  eventAddress,
-  eventType,
-  role,
-  qrToken,
+  to, name, eventTitle, eventDate, eventAddress,
+  eventType, role, qrToken,
 }) => {
-  const typeEmoji =
-    {
-      cleanup: "🧹",
-      plantation: "🌳",
-      repair: "🏗️",
-      awareness: "📢",
-      student: "🎓",
-      meetup: "🤝",
-    }[eventType] || "🤝";
+  const typeEmoji = {
+    cleanup:"🧹", plantation:"🌳", repair:"🏗️",
+    awareness:"📢", student:"🎓", meetup:"🤝"
+  }[eventType] || "🤝";
 
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
   const formattedTime = new Date(eventDate).toLocaleTimeString("en-BD", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const qrBuffer = await QRCode.toBuffer(qrToken, {
-    width: 300, margin: 3, color: { dark: "#111827", light: "#ffffff" },
+    hour: "2-digit", minute: "2-digit",
   });
 
   const content = `
-    <h1>🎉 Registration Successful (Free Event)</h1>
+    <h1>Registration confirmed</h1>
+    <p>Hi <strong>${name}</strong>, your free registration is confirmed.</p>
 
-    <p>Hi <strong>${name}</strong>, your registration is confirmed for the event below.</p>
+    <div class="card">
+      <p style="font-weight:600;">
+        ${typeEmoji} ${eventTitle}
+      </p>
+      <p class="muted" style="margin-top:6px;">
+        📅 ${formattedDate} • ${formattedTime}
+      </p>
+      <p class="muted">📍 ${eventAddress}</p>
+      <p class="muted">Role: ${role}</p>
+    </div>
 
-    <div class="highlight-box">
-      <div class="detail-row">
-        <span class="detail-icon">${typeEmoji}</span>
-        <strong style="font-size:16px">${eventTitle}</strong>
+    <div class="card" style="text-align:center;">
+      <p class="muted">QR Token</p>
+      <div style="font-family:monospace;font-weight:600;color:#16a34a;margin-top:10px;">
+        ${qrToken}
       </div>
-
-      <div class="detail-row">🗓️ ${formattedDate} at ${formattedTime}</div>
-      <div class="detail-row">📍 ${eventAddress}</div>
-      <div class="detail-row">👤 Role: <strong>${role}</strong></div>
     </div>
 
-    <div class="qr-box">
-      <p style="font-weight:600;color:#111;margin-bottom:6px">
-        Your Attendance QR Token
-      </p>
-
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
-        Show this QR token at the event entry
-      </p>
-
-      <span class="token-code">${qrToken}</span>
-
-      <p style="font-size:12px;color:#9ca3af;margin-top:12px">
-        Do not share this token with others
+    <div class="card">
+      <p style="color:#16a34a;font-weight:600;margin:0;">
+        No payment required
       </p>
     </div>
 
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin:20px 0">
-      <p style="color:#166534;font-weight:600;margin:0">
-        ✅ This is a FREE registration — no payment required
-      </p>
-    </div>
-
-    <div style="margin-top:20px">
-      <p style="font-weight:600">Next Steps:</p>
-      <ul style="padding-left:18px;color:#374151">
-        <li>Save this email</li>
-        <li>Bring your QR token on event day</li>
-        <li>Arrive 10–15 minutes early</li>
-      </ul>
-    </div>
+    <p class="muted">Bring your QR code on event day.</p>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `🎉 Free Registration Confirmed — ${eventTitle}`,
+    subject: `Confirmed — ${eventTitle}`,
     html: baseTemplate(content),
-    attachments: [
-      { filename: "qr-checkin.png", content: qrBuffer, contentType: "image/png" },
-    ]
   });
 };
 
@@ -383,39 +344,34 @@ const sendPaymentConfirmationEmail = async ({
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
-  const qrBuffer = await QRCode.toBuffer(qrToken, {
-    width: 300, margin: 3, color: { dark: "#111827", light: "#ffffff" },
-  });
-
   const content = `
-    <h1>Payment Confirmed! ✅</h1>
-    <p>Hi <strong>${name}</strong>, your payment of <strong>৳${amount}</strong> has been received and your registration is now confirmed!</p>
+    <h1>Payment confirmed</h1>
+    <p>Hi <strong>${name}</strong>, we’ve received your payment of <strong>৳${amount}</strong>.</p>
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">🎉</span><strong style="font-size:16px">${eventTitle}</strong></div>
-      <div class="detail-row"><span class="detail-icon">🗓️</span>${formattedDate}</div>
-      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
-      <div class="detail-row"><span class="detail-icon">💳</span>Amount Paid: <strong>৳${amount}</strong></div>
+    <div class="card">
+      <p style="font-weight:600;">${eventTitle}</p>
+      <p class="muted">📅 ${formattedDate}</p>
+      <p class="muted">📍 ${eventAddress}</p>
+      <p>💳 Paid: ৳${amount}</p>
     </div>
 
-    <div class="qr-box">
-    <p style="margin-bottom:8px;font-weight:600;color:#111">Your Attendance QR Token</p>
-    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">Show this at the event entrance to mark attendance</p>
-    <span class="token-code">${qrToken}</span>
-    <p style="font-size:12px;color:#9ca3af;margin-top:12px">Keep this safe. One token per registration.</p>
+    <div class="card" style="text-align:center;">
+      <p class="muted">Attendance QR</p>
+      <div style="font-family:monospace;font-weight:600;color:#16a34a;margin-top:10px;">
+        ${qrToken}
+      </div>
     </div>
 
-    <p>See you at the event! 💚</p>
+    <p class="muted">
+      You’re all set. See you at the event.
+    </p>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `✅ Payment Confirmed — "${eventTitle}"`,
+    subject: `Payment confirmed — ${eventTitle}`,
     html: baseTemplate(content),
-    attachments: [
-      { filename: "qr-checkin.png", content: qrBuffer, contentType: "image/png" },
-    ]
   });
 };
 
@@ -552,26 +508,31 @@ const sendWaitlistConfirmation = async ({
   });
 
   const content = `
-    <h1>You're on the waitlist ⏳</h1>
-    <p>Hi <strong>${name}</strong>, all volunteer spots for <strong>${eventTitle}</strong> are currently full. You've been added to the waitlist.</p>
+    <h1>You're on the waitlist</h1>
+    <p>Hi <strong>${name}</strong>, all volunteer spots for <strong>${eventTitle}</strong> are currently full.</p>
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">🏅</span>Your waitlist position: <strong style="font-size:18px;color:#16a34a">#${waitlistPosition}</strong></div>
-      <div class="detail-row"><span class="detail-icon">🗓️</span>${formattedDate}</div>
-      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
+    <div class="card">
+      <p class="muted" style="margin-bottom:8px;">Waitlist status</p>
+      <h2 style="font-size:28px;color:#16a34a;margin-bottom:10px;">#${waitlistPosition}</h2>
+      <p>${formattedDate}</p>
+      <p>${eventAddress}</p>
     </div>
 
-    <p>We'll notify you <strong>immediately</strong> if a spot opens up. The sooner someone cancels, the sooner you'll get in.</p>
+    <p class="muted">
+      You’ll be notified automatically if a spot opens up. No action is needed right now.
+    </p>
 
-    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;margin:20px 0">
-      <p style="color:#92400e;font-size:14px;margin:0">⚡ Tip: Waitlist spots move fast. Keep an eye on your inbox!</p>
+    <div class="card" style="background:#f9fafb;text-align:center;">
+      <p style="font-size:13px;color:#6b7280;margin:0;">
+        💡 Tip: Spots open quickly — keep an eye on your inbox
+      </p>
     </div>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `⏳ Waitlist #${waitlistPosition} — "${eventTitle}"`,
+    subject: `Waitlist #${waitlistPosition} — ${eventTitle}`,
     html: baseTemplate(content),
   });
 };
@@ -587,33 +548,45 @@ const sendWaitlistPromotion = async ({
   });
 
   const content = `
-    <h1>A spot opened up! 🎊</h1>
-    <p>Great news, <strong>${name}</strong>! A volunteer cancelled and your waitlist spot for <strong>${eventTitle}</strong> is now available.</p>
+    <h1>Good news — a spot opened</h1>
+    <p>Hi <strong>${name}</strong>, a spot just opened for <strong>${eventTitle}</strong>.</p>
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">⚡</span><strong>Act fast — spot reserved for 12 hours only!</strong></div>
-      <div class="detail-row"><span class="detail-icon">🗓️</span>${formattedDate}</div>
-      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
+    <div class="card">
+      <p class="muted">Event details</p>
+      <p style="margin-top:6px;">📅 ${formattedDate}</p>
+      <p>📍 ${eventAddress}</p>
+      <p style="margin-top:10px;">
+        <strong>QR Token:</strong> <span style="color:#16a34a;font-weight:600;">${qrToken}</span>
+      </p>
     </div>
 
-    <div class="qr-box">
-      <p style="font-weight:600;color:#111;margin-bottom:6px">Your Attendance QR Token</p>
-      <span class="token-code">${qrToken}</span>
-    </div>
+    <p class="muted">
+      This spot is reserved for a limited time. Confirm before it expires.
+    </p>
 
-    ${registrationFee > 0 ? `
-    <p style="text-align:center">
-      <a href="${paymentLink}" class="btn">Complete Payment ৳${registrationFee} →</a>
-    </p>` : `
-    <p style="text-align:center">
-      <a href="#" class="btn">Confirm Your Spot →</a>
-    </p>`}
+    <div style="text-align:center;margin-top:20px;">
+      <a href="${registrationFee > 0 ? paymentLink : '#'}"
+         style="
+           display:inline-block;
+           padding:12px 18px;
+           background:#111827;
+           color:#fff;
+           border-radius:10px;
+           font-size:14px;
+           font-weight:600;
+           text-decoration:none;
+         ">
+        ${registrationFee > 0
+          ? `Complete Payment ৳${registrationFee}`
+          : `Confirm Your Spot`}
+      </a>
+    </div>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `🎊 Spot opened! Confirm now — "${eventTitle}"`,
+    subject: `Spot opened — ${eventTitle}`,
     html: baseTemplate(content),
   });
 };
@@ -629,33 +602,45 @@ const sendEventReminder = async ({
   });
 
   const content = `
-    <h1>Event tomorrow! 🌅</h1>
-    <p>Hi <strong>${name}</strong>, just a reminder that <strong>${eventTitle}</strong> is happening tomorrow.</p>
+    <h1>Event reminder</h1>
+    <p>Hi <strong>${name}</strong>, your event <strong>${eventTitle}</strong> is tomorrow.</p>
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">⏰</span>Starts at <strong>${formattedTime}</strong></div>
-      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
+    <div class="card">
+      <p class="muted">Schedule</p>
+      <p style="margin-top:8px;">⏰ ${formattedTime}</p>
+      <p>📍 ${eventAddress}</p>
     </div>
 
     ${equipmentList?.length > 0 ? `
-    <p><strong>📦 Remember to bring:</strong></p>
-    <ul style="padding-left:20px;margin-bottom:16px">
-      ${equipmentList.map((item) => `<li style="margin-bottom:6px;color:#374151">${item}</li>`).join("")}
-    </ul>` : ""}
+      <div class="card">
+        <p class="muted">Bring with you</p>
+        <ul style="margin-top:10px; padding-left:18px;">
+          ${equipmentList.map(item => `
+            <li style="margin-bottom:6px; color:#374151; font-size:13.5px;">
+              ${item}
+            </li>
+          `).join("")}
+        </ul>
+      </div>
+    ` : ""}
 
-    <div class="qr-box">
-      <p style="font-weight:600;margin-bottom:6px">Your Attendance QR Token</p>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:10px">Have this ready for check-in</p>
-      <span class="token-code">${qrToken}</span>
+    <div class="card" style="text-align:center;">
+      <p class="muted" style="margin-bottom:10px;">Check-in QR</p>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px;">
+        Keep this ready at arrival
+      </p>
+      <div style="font-family:monospace;font-size:14px;font-weight:600;color:#16a34a;">
+        ${qrToken}
+      </div>
     </div>
 
-    <p>We look forward to seeing you! 💚</p>
+    <p class="muted">We’re looking forward to seeing you.</p>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `🌅 Tomorrow: "${eventTitle}" — See you there!`,
+    subject: `Tomorrow — ${eventTitle}`,
     html: baseTemplate(content),
   });
 };
@@ -665,22 +650,36 @@ const sendEventReminder = async ({
 ───────────────────────────────────────────── */
 const sendDonorThankYou = async ({ to, name, eventTitle, amount }) => {
   const content = `
-    <h1>Thank you for your donation! 💚</h1>
-    <p>Hi <strong>${name}</strong>, your generous contribution of <strong>৳${amount}</strong> to <strong>${eventTitle}</strong> has been received.</p>
+    <h1>Thank you</h1>
+    <p>Hi <strong>${name}</strong>, we’ve received your donation for <strong>${eventTitle}</strong>.</p>
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">💰</span>Donation amount: <strong>৳${amount}</strong></div>
-      <div class="detail-row"><span class="detail-icon">🌍</span>Your donation helps buy equipment and supplies for the event.</div>
+    <div class="card">
+      <p class="muted">Contribution</p>
+      <h2 style="font-size:24px;color:#16a34a;margin-top:6px;">
+        ৳${amount}
+      </h2>
     </div>
 
-    <p>After the event, you'll receive a spending breakdown showing exactly how your money was used, along with before/after photos of the impact.</p>
-    <p>Every contribution matters. Thank you for making your community a better place! 🙌</p>
+    <div class="card">
+      <p class="muted">Impact</p>
+      <p style="margin-top:8px;">
+        Your support helps fund tools, materials, and on-ground execution for this event.
+      </p>
+    </div>
+
+    <p class="muted">
+      After the event, you’ll receive a transparent breakdown and impact update.
+    </p>
+
+    <p style="margin-top:18px;">
+      Thank you for supporting your community 💚
+    </p>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `💚 Thank you for donating to "${eventTitle}"`,
+    subject: `Thank you for your support — ${eventTitle}`,
     html: baseTemplate(content),
   });
 };
