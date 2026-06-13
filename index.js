@@ -43,7 +43,7 @@ const verifyFBToken = async (req, res, next) => {
   try{
     const idToken = token.split(' ')[1]
     const decoded = await admin.auth().verifyIdToken(idToken)
-    console.log("decoded info", decoded)
+    // console.log("decoded info", decoded)
     req.decoded_email = decoded.email
     next()
   }catch(err){
@@ -1567,6 +1567,96 @@ async function run() {
           success: false,
           message: "Failed to fetch event details",
         });
+      }
+    });
+
+    //get single event confirmed volunteers
+    app.get("/events/:id/volunteers", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const eventId = new ObjectId(req.params.id);
+        const registrations = await eventRegistrationCollection
+          .find({ eventId, status: "confirmed" })
+          .toArray();
+
+        res.json({ success: true, registrations });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
+    // get single event waitlist
+    app.get("/events/:id/waitlist", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const eventId = new ObjectId(req.params.id);
+        const waitlist = await eventRegistrationCollection
+          .find({ eventId, status: "waitlisted" })
+          .sort({ waitlistPosition: 1 })
+          .toArray();
+
+        res.json({ success: true, waitlist });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
+    // get all event waitlist for Admin
+    app.get("/admin/waitlists", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const waitlists = await eventRegistrationCollection
+          .aggregate([
+            { $match: { status: "waitlisted" } },
+            {
+              $group: {
+                _id: "$eventId",
+                waitlistCount: { $sum: 1 },
+              },
+            },
+            {
+              $lookup: {
+                from: "event",
+                localField: "_id",
+                foreignField: "_id",
+                as: "event",
+              },
+            },
+            { $unwind: "$event" },
+            {
+              $project: {
+                _id: 0,
+                eventId: "$_id",
+                waitlistCount: 1,
+                "event._id": 1,
+                "event.title": 1,
+                "event.date": 1,
+                "event.eventType": 1,
+                "event.maxVolunteers": 1,
+                "event.volunteerCount": 1,
+                "event.location": 1,
+                "event.status": 1,
+              },
+            },
+            { $sort: { waitlistCount: -1 } },
+          ])
+          .toArray();
+
+        res.json({ success: true, total: waitlists.length, waitlists });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
       }
     });
 
