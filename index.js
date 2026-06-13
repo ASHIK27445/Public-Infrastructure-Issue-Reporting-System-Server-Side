@@ -513,36 +513,42 @@ async function run() {
           return res.status(404).json({ message: "Event not found" });
         }
 
-        /* ───────── RACE CONDITION CHECK ───────── */
-        let isSpotAvailable = true;
+        /* ───────── ATOMIC SPOT CLAIM ───────── */
+        const countField = registration.role === "guest" ? "guestCount" : "volunteerCount";
+        const limitField = registration.role === "guest" ? "guestNumber" : "maxVolunteers";
+
+        let atomicFilter;
 
         if (registration.role === "guest") {
-          if (!event.isGuestUnlimited) {
-            const guestCount = await eventRegistrationCollection.countDocuments({
-              eventId: registration.eventId,
-              status: "confirmed",
-              role: "guest",
-            });
-            if (guestCount >= (event.guestNumber || 0)) {
-              isSpotAvailable = false;
-            }
-          }
+          atomicFilter = {
+            _id: registration.eventId,
+            $or: [
+              { isGuestUnlimited: true },
+              { $expr: { $lt: ["$guestCount", "$guestNumber"] } },
+            ],
+          };
         } else {
-          if (event.maxVolunteers) {
-            const volunteerCount = await eventRegistrationCollection.countDocuments({
-              eventId: registration.eventId,
-              status: "confirmed",
-              role: { $ne: "guest" },
-            });
-            if (volunteerCount >= event.maxVolunteers) {
-              isSpotAvailable = false;
-            }
-          }
+          atomicFilter = {
+            _id: registration.eventId,
+            $or: [
+              { maxVolunteers: { $exists: false } },
+              { maxVolunteers: null },
+              { $expr: { $lt: ["$volunteerCount", "$maxVolunteers"] } },
+            ],
+          };
         }
 
+        const updatedEvent = await eventCollection.findOneAndUpdate(
+          atomicFilter,
+          {
+            $inc: { [countField]: 1 },
+            $set: { updatedAt: new Date() },
+          },
+          { returnDocument: "after" }
+        );
+
         /* ───────── SPOT FULL → REFUND + WAITLIST ───────── */
-        if (!isSpotAvailable) {
-          // Stripe refund
+        if (!updatedEvent) {
           try {
             await stripe.refunds.create({
               payment_intent: session.payment_intent,
@@ -551,7 +557,6 @@ async function run() {
             console.error("Refund error:", refundErr.message);
           }
 
-          // waitlist position
           const waitlistCount = await eventRegistrationCollection.countDocuments({
             eventId: registration.eventId,
             status: "waitlisted",
@@ -569,7 +574,6 @@ async function run() {
             }
           );
 
-          // refund email
           try {
             await sendWaitlistConfirmation({
               to: registration.email,
@@ -578,7 +582,7 @@ async function run() {
               eventDate: event.date,
               eventAddress: event.location?.address,
               waitlistPosition: waitlistCount + 1,
-              refunded: true, // email template এ উল্লেখ করতে পারো
+              refunded: true,
             });
           } catch (emailErr) {
             console.error("Email error:", emailErr.message);
@@ -602,15 +606,6 @@ async function run() {
               stripeSessionId: sessionId,
               updatedAt: new Date(),
             },
-          }
-        );
-
-        const countField = registration.role === "guest" ? "guestCount" : "volunteerCount";
-        await eventCollection.updateOne(
-          { _id: registration.eventId },
-          {
-            $inc: { [countField]: 1 },
-            $set: { updatedAt: new Date() },
           }
         );
 
@@ -664,7 +659,7 @@ async function run() {
         return res.status(500).json({ message: "Server error", error: err.message });
       }
     });
-    
+
     //verify subscription payment
     app.get('/verify-payment/:sessionId', verifyFBToken, async(req, res) => {
       const {sessionId} = req.params;
