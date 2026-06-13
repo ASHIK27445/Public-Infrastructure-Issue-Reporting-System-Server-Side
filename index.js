@@ -1647,6 +1647,11 @@ async function run() {
         .project({ name: 1, _id: 1 })
         .toArray()
 
+        const waitlist = await eventRegistrationCollection.find({eventId: new ObjectId(id), status:'waitlisted'})
+        .toArray()
+
+        const waitlistCount = waitlist.length
+
         res.send({
           success: true,
           event,
@@ -1657,7 +1662,8 @@ async function run() {
             guest: guestCount
           },
           donations,
-          freeParticipants
+          freeParticipants,
+          waitlistCount
         });
       } catch (error) {
         console.error(error);
