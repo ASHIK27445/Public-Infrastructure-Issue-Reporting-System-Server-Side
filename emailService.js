@@ -147,6 +147,94 @@ const sendRegistrationConfirmation = async ({
   });
 };
 
+const sendFreeRegistrationConfirmationEmail = async ({
+  to,
+  name,
+  eventTitle,
+  eventDate,
+  eventAddress,
+  eventType,
+  role,
+  qrToken,
+}) => {
+  const typeEmoji =
+    {
+      cleanup: "🧹",
+      plantation: "🌳",
+      repair: "🏗️",
+      awareness: "📢",
+      student: "🎓",
+      meetup: "🤝",
+    }[eventType] || "🤝";
+
+  const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const formattedTime = new Date(eventDate).toLocaleTimeString("en-BD", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const content = `
+    <h1>🎉 Registration Successful (Free Event)</h1>
+
+    <p>Hi <strong>${name}</strong>, your registration is confirmed for the event below.</p>
+
+    <div class="highlight-box">
+      <div class="detail-row">
+        <span class="detail-icon">${typeEmoji}</span>
+        <strong style="font-size:16px">${eventTitle}</strong>
+      </div>
+
+      <div class="detail-row">🗓️ ${formattedDate} at ${formattedTime}</div>
+      <div class="detail-row">📍 ${eventAddress}</div>
+      <div class="detail-row">👤 Role: <strong>${role}</strong></div>
+    </div>
+
+    <div class="qr-box">
+      <p style="font-weight:600;color:#111;margin-bottom:6px">
+        Your Attendance QR Token
+      </p>
+
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        Show this QR token at the event entry
+      </p>
+
+      <span class="token-code">${qrToken}</span>
+
+      <p style="font-size:12px;color:#9ca3af;margin-top:12px">
+        Do not share this token with others
+      </p>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin:20px 0">
+      <p style="color:#166534;font-weight:600;margin:0">
+        ✅ This is a FREE registration — no payment required
+      </p>
+    </div>
+
+    <div style="margin-top:20px">
+      <p style="font-weight:600">Next Steps:</p>
+      <ul style="padding-left:18px;color:#374151">
+        <li>Save this email</li>
+        <li>Bring your QR token on event day</li>
+        <li>Arrive 10–15 minutes early</li>
+      </ul>
+    </div>
+  `;
+
+  return transporter.sendMail({
+    from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
+    to,
+    subject: `🎉 Free Registration Confirmed — ${eventTitle}`,
+    html: baseTemplate(content),
+  });
+};
+
 const sendPaymentConfirmationEmail = async ({
   to, name, eventTitle, eventDate, eventAddress, amount, qrToken,
 }) => {
@@ -329,6 +417,7 @@ const sendDonorThankYou = async ({ to, name, eventTitle, amount }) => {
 module.exports = {
   sendRegistrationConfirmation,
   sendPaymentConfirmationEmail,
+  sendFreeRegistrationConfirmationEmail,
   sendWaitlistConfirmation,
   sendWaitlistPromotion,
   sendEventReminder,

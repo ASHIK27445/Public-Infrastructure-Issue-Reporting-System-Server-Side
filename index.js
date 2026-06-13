@@ -9,10 +9,11 @@ const { v4: uuidv4 } = require('uuid')
 const { 
   sendRegistrationConfirmation, 
   sendPaymentConfirmationEmail,
+  sendFreeRegistrationConfirmationEmail,
   sendWaitlistConfirmation,
   sendWaitlistPromotion,
   sendEventReminder,
-  sendDonorThankYou
+  sendDonorThankYo
 } = require("./emailService")
 
 //toxicity Checker
@@ -2393,7 +2394,6 @@ async function run() {
             }
 
             const isPaidEvent = (event.registrationFee || 0) > 0;
-            const qrToken = uuidv4();
 
             await eventRegistrationCollection.updateOne(
               { _id: existing._id },
@@ -2402,7 +2402,7 @@ async function run() {
                   role: "guest",
                   status: isPaidEvent ? "pending" : "confirmed",
                   paymentStatus: isPaidEvent ? "pending" : "not-required",
-                  qrToken: isPaidEvent ? null : qrToken,
+                  qrToken: existing.qrToken,
                   waitlistPosition: null,
                   name,
                   phone,
@@ -2415,7 +2415,7 @@ async function run() {
               }
             );
 
-            // free → guestCount বাড়াও
+            // free → guestCount increase
             if (!isPaidEvent) {
               await eventCollection.updateOne(
                 { _id: eventId },
@@ -2468,7 +2468,8 @@ async function run() {
             // email
             try {
               if (!isPaidEvent) {
-                await sendRegistrationConfirmation({
+                //free event confirmation email
+                await sendFreeRegistrationConfirmationEmail({
                   to: email,
                   name,
                   eventTitle: event.title,
@@ -2502,7 +2503,7 @@ async function run() {
               message: isPaidEvent ? "Proceed to payment" : "Switched to guest successfully",
               registration: {
                 _id: existing._id,
-                qrToken: isPaidEvent ? null : qrToken,
+                qrToken: qrToken,
                 status: isPaidEvent ? "pending" : "confirmed",
                 paymentStatus: isPaidEvent ? "pending" : "not-required",
                 paymentUrl,
@@ -2530,7 +2531,6 @@ async function run() {
             }
 
             const isPaidEvent = (event.registrationFee || 0) > 0;
-            const qrToken = uuidv4();
 
             await eventRegistrationCollection.updateOne(
               { _id: existing._id },
@@ -2539,7 +2539,7 @@ async function run() {
                   role: "volunteer",
                   status: isPaidEvent ? "pending" : "confirmed",
                   paymentStatus: isPaidEvent ? "pending" : "not-required",
-                  qrToken: isPaidEvent ? null : qrToken,
+                  qrToken: existing.qrToken,
                   waitlistPosition: null,
                   name,
                   phone,
@@ -2552,7 +2552,7 @@ async function run() {
               }
             );
 
-            // free → volunteerCount বাড়াও
+            // free → volunteerCount increase
             if (!isPaidEvent) {
               await eventCollection.updateOne(
                 { _id: eventId },
@@ -2604,18 +2604,31 @@ async function run() {
 
             // email
             try {
-              await sendRegistrationConfirmation({
-                to: email,
-                name,
-                eventTitle: event.title,
-                eventDate: event.date,
-                eventAddress: event.location?.address,
-                eventType: event.eventType,
-                qrToken: isPaidEvent ? null : qrToken,
-                role: "volunteer",
-                registrationFee: event.registrationFee,
-                paymentLink: isPaidEvent ? paymentUrl : null,
-              });
+              if (!isPaidEvent) {
+                await sendFreeEventRegistrationConfirmationEmail({
+                  to: email,
+                  name,
+                  eventTitle: event.title,
+                  eventDate: event.date,
+                  eventAddress: event.location?.address,
+                  eventType: event.eventType,
+                  qrToken: qrToken,
+                  role: "volunteer",
+                });
+              } else {
+                await sendRegistrationConfirmation({
+                  to: email,
+                  name,
+                  eventTitle: event.title,
+                  eventDate: event.date,
+                  eventAddress: event.location?.address,
+                  eventType: event.eventType,
+                  qrToken: null,
+                  role: "volunteer",
+                  registrationFee: event.registrationFee,
+                  paymentLink: paymentUrl,
+                });
+              }
             } catch (emailErr) {
               console.error("Email error:", emailErr.message);
             }
@@ -2624,7 +2637,7 @@ async function run() {
               message: isPaidEvent ? "Proceed to payment" : "Switched to volunteer successfully",
               registration: {
                 _id: existing._id,
-                qrToken: isPaidEvent ? null : qrToken,
+                qrToken: qrToken,
                 status: isPaidEvent ? "pending" : "confirmed",
                 paymentStatus: isPaidEvent ? "pending" : "not-required",
                 paymentUrl,
@@ -2794,20 +2807,10 @@ async function run() {
               eventAddress: event.location?.address,
               waitlistPosition,
             });
-          } else if (status === "confirmed") {
-            await sendRegistrationConfirmation({
-              to: email,
-              name,
-              eventTitle: event.title,
-              eventDate: event.date,
-              eventAddress: event.location?.address,
-              eventType: event.eventType,
-              qrToken,
-              role,
-              registrationFee: event.registrationFee,
-              paymentLink: null,
-            });
-          } else if (status === "pending") {
+          } 
+          
+          else if (status === "pending") {
+            // paid event → waiting for payment
             await sendRegistrationConfirmation({
               to: email,
               name,
@@ -2820,7 +2823,38 @@ async function run() {
               registrationFee: event.registrationFee,
               paymentLink: paymentUrl,
             });
+          } 
+          
+          else if (status === "confirmed") {
+            if (!isPaidEvent) {
+              // FREE EVENT EMAIL (NEW FUNCTION)
+              await sendFreeEventRegistrationConfirmationEmail({
+                to: email,
+                name,
+                eventTitle: event.title,
+                eventDate: event.date,
+                eventAddress: event.location?.address,
+                eventType: event.eventType,
+                qrToken,
+                role,
+              });
+            } else {
+              // fallback safety (just in case)
+              await sendRegistrationConfirmation({
+                to: email,
+                name,
+                eventTitle: event.title,
+                eventDate: event.date,
+                eventAddress: event.location?.address,
+                eventType: event.eventType,
+                qrToken: null,
+                role,
+                registrationFee: event.registrationFee,
+                paymentLink: null,
+              });
+            }
           }
+
         } catch (emailErr) {
           console.error("Email error:", emailErr.message);
         }
