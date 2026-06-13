@@ -179,6 +179,10 @@ const sendFreeRegistrationConfirmationEmail = async ({
     minute: "2-digit",
   });
 
+  const qrBuffer = await QRCode.toBuffer(qrToken, {
+    width: 300, margin: 3, color: { dark: "#111827", light: "#ffffff" },
+  });
+
   const content = `
     <h1>🎉 Registration Successful (Free Event)</h1>
 
@@ -232,6 +236,9 @@ const sendFreeRegistrationConfirmationEmail = async ({
     to,
     subject: `🎉 Free Registration Confirmed — ${eventTitle}`,
     html: baseTemplate(content),
+    attachments: [
+      { filename: "qr-checkin.png", content: qrBuffer, contentType: "image/png" },
+    ]
   });
 };
 
@@ -240,6 +247,10 @@ const sendPaymentConfirmationEmail = async ({
 }) => {
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  const qrBuffer = await QRCode.toBuffer(qrToken, {
+    width: 300, margin: 3, color: { dark: "#111827", light: "#ffffff" },
   });
 
   const content = `
@@ -268,6 +279,9 @@ const sendPaymentConfirmationEmail = async ({
     to,
     subject: `✅ Payment Confirmed — "${eventTitle}"`,
     html: baseTemplate(content),
+    attachments: [
+      { filename: "qr-checkin.png", content: qrBuffer, contentType: "image/png" },
+    ]
   });
 };
 
@@ -281,11 +295,8 @@ const sendFreeParticipationConfirmation = async ({
     hour: "2-digit", minute: "2-digit",
   });
 
-  // QR → PNG Buffer directly (most compatible)
   const qrBuffer = await QRCode.toBuffer(qrToken, {
-    width: 220,
-    margin: 2,
-    color: { dark: "#111827", light: "#ffffff" },
+    width: 300, margin: 3, color: { dark: "#111827", light: "#ffffff" },
   });
 
   const content = `
@@ -301,21 +312,11 @@ const sendFreeParticipationConfirmation = async ({
 
     <div class="qr-box">
       <p style="font-weight:600;color:#111;margin-bottom:6px">Your Attendance QR Code</p>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
-        Show this at the event entrance for check-in.<br/>
-        Screenshot or print it — internet not required on event day.
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        📎 QR code attached as <strong>qr-checkin.png</strong> — open and show at entrance.
       </p>
-      <img
-        src="cid:event-qr-code"
-        alt="Attendance QR Code"
-        width="220"
-        height="220"
-        style="display:block;margin:0 auto;border-radius:8px;border:1px solid #e5e7eb;"
-      />
       <span class="token-code">${qrToken}</span>
-      <p style="font-size:12px;color:#9ca3af;margin-top:10px">
-        This QR code is unique to you — do not share it.
-      </p>
+      <p style="font-size:12px;color:#9ca3af;margin-top:10px">This QR code is unique to you — do not share it.</p>
     </div>
 
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin:16px 0">
@@ -325,18 +326,9 @@ const sendFreeParticipationConfirmation = async ({
     <div class="divider"></div>
     <p style="font-weight:600;margin-bottom:16px">What to do next:</p>
     <div class="steps">
-      <div class="step-item">
-        <div class="step-num">1</div>
-        <div class="step-text">Save this email or screenshot the QR code above.</div>
-      </div>
-      <div class="step-item">
-        <div class="step-num">2</div>
-        <div class="step-text">Arrive 10–15 minutes early and show the QR at the entrance.</div>
-      </div>
-      <div class="step-item">
-        <div class="step-num">3</div>
-        <div class="step-text">After attending, you'll receive a digital certificate at this email.</div>
-      </div>
+      <div class="step-item"><div class="step-num">1</div><div class="step-text">Open the attached <strong>qr-checkin.png</strong> and save or screenshot it.</div></div>
+      <div class="step-item"><div class="step-num">2</div><div class="step-text">Arrive 10–15 minutes early and show the QR at the entrance.</div></div>
+      <div class="step-item"><div class="step-num">3</div><div class="step-text">After attending, you'll receive a digital certificate at this email.</div></div>
     </div>
   `;
 
@@ -346,12 +338,7 @@ const sendFreeParticipationConfirmation = async ({
     subject: `🎟️ Free Participation Confirmed — "${eventTitle}"`,
     html: baseTemplate(content),
     attachments: [
-      {
-        filename: "qr-checkin.png",
-        content: qrBuffer,        // ← Buffer directly, base64 string না
-        contentType: "image/png",
-        cid: "event-qr-code",     // ← img src="cid:event-qr-code" এর সাথে match
-      },
+      { filename: "qr-checkin.png", content: qrBuffer, contentType: "image/png" },
     ],
   });
 };
