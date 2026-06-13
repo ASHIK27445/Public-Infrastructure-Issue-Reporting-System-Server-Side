@@ -1641,6 +1641,11 @@ async function run() {
         const donations = await donationCollection
         .find({ eventId: new ObjectId(id), paymentStatus: "paid" })
         .toArray();
+        
+        const freeParticipants = await freeParticipateCollection
+        .find({eventId: new ObjectId(id)})
+        .project({ name: 1, _id: 1 })
+        .toArray()
 
         res.send({
           success: true,
@@ -1651,7 +1656,8 @@ async function run() {
             volunteer: volunteerCount,
             guest: guestCount
           },
-          donations
+          donations,
+          freeParticipants
         });
       } catch (error) {
         console.error(error);
