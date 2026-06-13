@@ -27,52 +27,186 @@ const baseTemplate = (content) => `
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CommunityFix</title>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f3; color: #1a1a1a; }
-    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
-    .header { background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 32px 40px; }
-    .header-logo { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-    .header-logo span { color: #86efac; }
-    .body { padding: 36px 40px; }
-    .footer { background: #f9fafb; border-top: 1px solid #f0f0f0; padding: 24px 40px; text-align: center; }
-    .footer p { font-size: 12px; color: #9ca3af; line-height: 1.6; }
-    h1 { font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px; }
-    p { font-size: 15px; line-height: 1.7; color: #374151; margin-bottom: 16px; }
-    .highlight-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px 24px; margin: 20px 0; }
-    .detail-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; font-size: 14px; color: #374151; }
-    .detail-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-    .btn { display: inline-block; background: #16a34a; color: #fff !important; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600; margin: 8px 0; }
-    .btn-outline { display: inline-block; border: 2px solid #16a34a; color: #16a34a !important; text-decoration: none; padding: 12px 26px; border-radius: 10px; font-size: 14px; font-weight: 600; margin: 8px 0; }
-    .qr-box { text-align: center; background: #fff; border: 2px dashed #d1d5db; border-radius: 12px; padding: 24px; margin: 20px 0; }
-    .token-code { font-family: 'Courier New', monospace; font-size: 13px; background: #f3f4f6; padding: 10px 16px; border-radius: 8px; color: #374151; word-break: break-all; margin-top: 12px; display: block; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .badge-green { background: #dcfce7; color: #166534; }
-    .badge-amber { background: #fef3c7; color: #92400e; }
-    .divider { height: 1px; background: #f3f4f6; margin: 24px 0; }
-    .steps { counter-reset: step; }
-    .step-item { display: flex; gap: 14px; margin-bottom: 16px; align-items: flex-start; }
-    .step-num { width: 28px; height: 28px; background: #dcfce7; color: #166534; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
-    .step-text { font-size: 14px; color: #374151; line-height: 1.6; padding-top: 3px; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #f6f7fb;
+      color: #111827;
+      line-height: 1.6;
+    }
+
+    .wrapper {
+      max-width: 620px;
+      margin: 48px auto;
+      background: #ffffff;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid #eef0f4;
+    }
+
+    /* HEADER */
+    .header {
+      padding: 28px 36px;
+      background: #ffffff;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .brand {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      color: #111827;
+    }
+
+    .brand span {
+      color: #16a34a;
+    }
+
+    /* BODY */
+    .body {
+      padding: 34px 36px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 14.5px;
+      color: #4b5563;
+      margin-bottom: 14px;
+    }
+
+    /* CARD */
+    .card {
+      background: #f9fafb;
+      border: 1px solid #eef2f7;
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin: 18px 0;
+    }
+
+    .muted {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    /* QR */
+    .qr {
+      margin-top: 20px;
+      text-align: center;
+      padding: 20px;
+      border: 1px dashed #e5e7eb;
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    /* STEPS */
+    .steps {
+      margin-top: 22px;
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #eaf7ef;
+      color: #16a34a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .step p {
+      margin: 0;
+      font-size: 13.5px;
+      color: #4b5563;
+    }
+
+    /* BADGE */
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #047857;
+      font-weight: 600;
+    }
+
+    /* FOOTER */
+    .footer {
+      padding: 20px 36px;
+      border-top: 1px solid #f1f5f9;
+      text-align: center;
+      background: #fafafa;
+    }
+
+    .footer p {
+      font-size: 11.5px;
+      color: #9ca3af;
+      margin: 0;
+    }
+
+    a {
+      color: #9ca3af;
+      text-decoration: none;
+    }
+
     @media (max-width: 600px) {
-      .body, .header, .footer { padding: 24px 20px; }
+      .wrapper {
+        margin: 0;
+        border-radius: 0;
+      }
+
+      .body, .header, .footer {
+        padding: 22px;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="wrapper">
+
     <div class="header">
-      <div class="header-logo">Community<span>Fix</span></div>
+      <div class="brand">Community<span>Fix</span></div>
     </div>
-    <div class="body">${content}</div>
+
+    <div class="body">
+      ${content}
+    </div>
+
     <div class="footer">
-      <p>This email was sent by CommunityFix · Dhaka, Bangladesh<br/>
-      You're receiving this because you registered for a community event.<br/>
-      <a href="#" style="color:#9ca3af">Unsubscribe</a> · <a href="#" style="color:#9ca3af">Privacy Policy</a></p>
+      <p>
+        © ${new Date().getFullYear()} CommunityFix · Built for better communities<br/>
+        <a href="#">Unsubscribe</a> · <a href="#">Privacy</a>
+      </p>
     </div>
+
   </div>
 </body>
-</html>`;
+</html>
+`;
 
 /* ─────────────────────────────────────────────
    1. VOLUNTEER REGISTRATION CONFIRMATION & PAYMENT CONFIRMATION MAIL
@@ -286,59 +420,123 @@ const sendPaymentConfirmationEmail = async ({
 };
 
 const sendFreeParticipationConfirmation = async ({
-  to, name, eventTitle, eventDate, eventAddress, qrToken,
+  to,
+  name,
+  eventTitle,
+  eventDate,
+  eventAddress,
+  qrToken,
 }) => {
-  const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  const date = new Date(eventDate).toLocaleDateString("en-BD", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
-  const formattedTime = new Date(eventDate).toLocaleTimeString("en-BD", {
-    hour: "2-digit", minute: "2-digit",
+
+  const time = new Date(eventDate).toLocaleTimeString("en-BD", {
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
   const qrBuffer = await QRCode.toBuffer(qrToken, {
-    width: 300, margin: 3, color: { dark: "#111827", light: "#ffffff" },
+    width: 320,
+    margin: 2,
+    color: { dark: "#111827", light: "#ffffff" },
   });
 
   const content = `
-    <h1>You're in! 🎟️</h1>
-    <p>Hi <strong>${name}</strong>, your free participation is confirmed. No payment needed — just show up!</p>
+  <div style="background:#f9fafb;padding:40px 12px;font-family:Arial,Helvetica,sans-serif;">
+    
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;">
 
-    <div class="highlight-box">
-      <div class="detail-row"><span class="detail-icon">🎟️</span><strong style="font-size:16px">${eventTitle}</strong></div>
-      <div class="detail-row"><span class="detail-icon">🗓️</span>${formattedDate} at ${formattedTime}</div>
-      <div class="detail-row"><span class="detail-icon">📍</span>${eventAddress}</div>
-      <div class="detail-row"><span class="detail-icon">🆓</span>Free Participation — No fee required</div>
-    </div>
-
-    <div class="qr-box">
-      <p style="font-weight:600;color:#111;margin-bottom:6px">Your Attendance QR Code</p>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
-        📎 QR code attached as <strong>qr-checkin.png</strong> — open and show at entrance.
+      <!-- Header -->
+      <p style="margin:0;font-size:14px;color:#6b7280;">
+        CommunityFix
       </p>
-      <span class="token-code">${qrToken}</span>
-      <p style="font-size:12px;color:#9ca3af;margin-top:10px">This QR code is unique to you — do not share it.</p>
-    </div>
 
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin:16px 0">
-      <p style="color:#166534;font-weight:600;margin:0">✅ Free Registration Confirmed — No payment needed!</p>
-    </div>
+      <h2 style="margin:6px 0 18px;font-size:20px;color:#111827;">
+        Your registration is confirmed
+      </h2>
 
-    <div class="divider"></div>
-    <p style="font-weight:600;margin-bottom:16px">What to do next:</p>
-    <div class="steps">
-      <div class="step-item"><div class="step-num">1</div><div class="step-text">Open the attached <strong>qr-checkin.png</strong> and save or screenshot it.</div></div>
-      <div class="step-item"><div class="step-num">2</div><div class="step-text">Arrive 10–15 minutes early and show the QR at the entrance.</div></div>
-      <div class="step-item"><div class="step-num">3</div><div class="step-text">After attending, you'll receive a digital certificate at this email.</div></div>
+      <!-- Greeting -->
+      <p style="margin:0 0 14px;font-size:14px;color:#374151;">
+        Hi <strong>${name}</strong>,
+      </p>
+
+      <p style="margin:0 0 22px;font-size:14px;color:#4b5563;line-height:1.6;">
+        You’re successfully registered for the event. Please use the QR code below for check-in.
+      </p>
+
+      <!-- Event Box -->
+      <div style="padding:16px 18px;border:1px solid #e5e7eb;border-radius:12px;background:#fafafa;">
+        <p style="margin:0;font-size:15px;font-weight:600;color:#111827;">
+          ${eventTitle}
+        </p>
+        <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">
+          ${date} • ${time}
+        </p>
+        <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">
+          ${eventAddress}
+        </p>
+        <p style="margin-top:10px;font-size:12px;color:#16a34a;font-weight:600;">
+          Free Entry
+        </p>
+      </div>
+
+      <!-- QR -->
+      <div style="text-align:center;margin-top:26px;">
+        <p style="margin:0 0 12px;font-size:13px;color:#374151;font-weight:600;">
+          Check-in QR Code
+        </p>
+
+        <span class="token-code">${qrToken}</span>
+
+        <p style="margin-top:10px;font-size:12px;color:#6b7280;">
+          Show qr attachment at the entrance
+        </p>
+      </div>
+
+      <!-- Steps -->
+      <div style="margin-top:26px;">
+        <p style="font-size:13px;font-weight:600;color:#111827;margin-bottom:8px;">
+          Next steps
+        </p>
+
+        <p style="margin:4px 0;font-size:13px;color:#6b7280;">
+          1. Save your QR code
+        </p>
+        <p style="margin:4px 0;font-size:13px;color:#6b7280;">
+          2. Arrive 10–15 minutes early
+        </p>
+        <p style="margin:4px 0;font-size:13px;color:#6b7280;">
+          3. Show QR at entry
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="margin-top:28px;padding-top:14px;border-top:1px solid #eee;text-align:center;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;">
+          © ${new Date().getFullYear()} CommunityFix
+        </p>
+      </div>
+
     </div>
+  </div>
   `;
 
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || "CommunityFix <noreply@communityfix.com>",
     to,
-    subject: `🎟️ Free Participation Confirmed — "${eventTitle}"`,
+    subject: `Registration confirmed — ${eventTitle}`,
     html: baseTemplate(content),
+
     attachments: [
-      { filename: "qr-checkin.png", content: qrBuffer, contentType: "image/png" },
+      {
+        filename: "qr-checkin.png",
+        content: qrBuffer,
+        cid: "qrImage"
+      },
     ],
   });
 };
