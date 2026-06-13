@@ -298,6 +298,12 @@ const sendFreeRegistrationConfirmationEmail = async ({
     hour: "2-digit", minute: "2-digit",
   });
 
+  const qrBuffer = await QRCode.toBuffer(qrToken, {
+    width: 320,
+    margin: 2,
+    color: { dark: "#111827", light: "#ffffff" },
+  });
+
   const content = `
     <h1>Registration confirmed</h1>
     <p>Hi <strong>${name}</strong>, your free registration is confirmed.</p>
@@ -334,6 +340,14 @@ const sendFreeRegistrationConfirmationEmail = async ({
     to,
     subject: `Confirmed — ${eventTitle}`,
     html: baseTemplate(content),
+    
+    attachments: [
+      {
+        filename: "qr-checkin.png",
+        content: qrBuffer,
+        cid: "qrImage"
+      },
+    ],
   });
 };
 
@@ -342,6 +356,12 @@ const sendPaymentConfirmationEmail = async ({
 }) => {
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  const qrBuffer = await QRCode.toBuffer(qrToken, {
+    width: 320,
+    margin: 2,
+    color: { dark: "#111827", light: "#ffffff" },
   });
 
   const content = `
@@ -372,6 +392,14 @@ const sendPaymentConfirmationEmail = async ({
     to,
     subject: `Payment confirmed — ${eventTitle}`,
     html: baseTemplate(content),
+    
+    attachments: [
+      {
+        filename: "qr-checkin.png",
+        content: qrBuffer,
+        cid: "qrImage"
+      },
+    ],
   });
 };
 

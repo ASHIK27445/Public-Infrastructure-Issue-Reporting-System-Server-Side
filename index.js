@@ -2648,7 +2648,7 @@ async function run() {
             // email
             try {
               if (!isPaidEvent) {
-                await sendFreeEventRegistrationConfirmationEmail({
+                await sendFreeRegistrationConfirmationEmail({
                   to: email,
                   name,
                   eventTitle: event.title,
@@ -2871,7 +2871,7 @@ async function run() {
           else if (status === "confirmed") {
             if (!isPaidEvent) {
               // FREE EVENT EMAIL (NEW FUNCTION)
-              await sendFreeEventRegistrationConfirmationEmail({
+              await sendFreeRegistrationConfirmationEmail({
                 to: email,
                 name,
                 eventTitle: event.title,
