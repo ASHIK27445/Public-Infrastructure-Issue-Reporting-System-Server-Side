@@ -2920,6 +2920,88 @@ async function run() {
         });
       }
     });
+
+    //event free r3egistration
+    app.post("/events/:id/free-participate", async (req, res) => {
+      try {
+        const eventId = new ObjectId(req.params.id);
+        const { name, email, phone } = req.body;
+        const now = new Date();
+
+        if (!name || !email || !phone) {
+          return res.status(400).json({ message: "Name, email and phone are required" });
+        }
+
+        const event = await eventCollection.findOne({ _id: eventId });
+        if (!event) return res.status(404).json({ message: "Event not found" });
+
+        if (!event.isFreeParticipate) {
+          return res.status(400).json({ message: "This event does not allow free participation" });
+        }
+
+        if (["completed", "cancelled"].includes(event.status)) {
+          return res.status(400).json({ message: "Event is no longer accepting registrations" });
+        }
+
+        //Duplicate check by phone
+        const existing = await freeParticipateCollection.findOne({ eventId, phone });
+        if (existing) {
+          return res.status(409).json({ message: "This phone number is already registered" });
+        }
+
+        // Capacity check
+        if (event.maxFreeParticipate > 0) {
+          const count = await freeParticipateCollection.countDocuments({ eventId });
+          if (count >= event.maxFreeParticipate) {
+            return res.status(400).json({ message: "Free participation spots are full" });
+          }
+        }
+
+        const qrToken = uuidv4();
+        const participantId = new ObjectId();
+
+        const doc = {
+          _id: participantId,
+          eventId,
+          name,
+          email,
+          phone,
+          qrToken,
+          attended: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await freeParticipateCollection.insertOne(doc);
+
+        // Email with QR
+        try {
+          await sendFreeParticipationConfirmation({
+            to: email,
+            name,
+            eventTitle: event.title,
+            eventDate: event.date,
+            eventAddress: event.location?.address,
+            qrToken,
+          });
+        } catch (emailErr) {
+          console.error("Email error:", emailErr.message);
+        }
+
+        return res.status(201).json({
+          success: true,
+          message: "Successfully registered as free participant",
+          participant: {
+            _id: participantId,
+            qrToken,
+          },
+        });
+
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
     
     //event reg payment webhook
     // app.post("/webhook/stripe", express.raw({ type: "application/json" }), async (req, res) => {
