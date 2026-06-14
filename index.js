@@ -3692,6 +3692,32 @@ async function run() {
       res.send(result)
     })
 
+    // ── Update Event Status ──
+    app.patch("/admin/events/:id/status", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const { status } = req.body;
+        const validStatuses = ["upcoming", "ongoing", "completed", "cancelled", "draft"];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+
+        const eventId = new ObjectId(req.params.id);
+        await eventCollection.updateOne(
+          { _id: eventId },
+          { $set: { status, updatedAt: new Date() } }
+        );
+
+        res.json({ success: true, message: `Status updated to ${status}` });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
     //------------------------------------------------------------------------------------//
     //delete method
     //------------------------------------------------------------------------------------//
