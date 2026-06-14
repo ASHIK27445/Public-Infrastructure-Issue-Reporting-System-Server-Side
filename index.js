@@ -1984,6 +1984,12 @@ async function run() {
           .sort({ createdAt: -1 })
           .toArray();
 
+        //free participate if it has
+        const freeParticipants = await freeParticipateCollection
+          .find({ eventId })
+          .sort({ createdAt: 1 })
+          .toArray()
+
         // Stats
         const [
           attendedCount,
@@ -2014,9 +2020,11 @@ async function run() {
           confirmed,
           waitlist,
           donations,
+          freeParticipants,
           stats: {
             confirmedCount:  confirmed.length,
             waitlistCount:   waitlist.length,
+            freeParticipantCount: freeParticipants.length,
             attendedCount,
             paidCount,
             pendingPayment,
