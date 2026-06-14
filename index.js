@@ -1765,6 +1765,61 @@ async function run() {
       }
     });
 
+    // get Event Stats for admin
+    app.get("/admin/events/stats", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const [overview, typeBreakdown, waitlistedCount, participantCount] = await Promise.all([
+          // Event counts + volunteer/donation totals
+          eventCollection.aggregate([
+            {
+              $group: {
+                _id: null,
+                totalEvents:     { $sum: 1 },
+                upcomingCount:   { $sum: { $cond: [{ $eq: ["$status", "upcoming"]  }, 1, 0] } },
+                ongoingCount:    { $sum: { $cond: [{ $eq: ["$status", "ongoing"]   }, 1, 0] } },
+                completedCount:  { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                cancelledCount:  { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
+                totalVolunteers: { $sum: { $ifNull: ["$volunteerCount", 0] } },
+                totalDonated:    { $sum: { $ifNull: ["$fundRaised",     0] } },
+              },
+            },
+          ]).toArray(),
+
+          // Type breakdown
+          eventCollection.aggregate([
+            { $group: { _id: "$eventType", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+          ]).toArray(),
+
+          // Total waitlisted from eventRegistrations
+          eventRegistrationCollection.countDocuments({ status: "waitlisted" }),
+
+          // Total free participants
+          freeParticipateCollection.countDocuments({}),
+        ]);
+
+        res.json({
+          overview: {
+            ...(overview[0] || {
+              totalEvents: 0, upcomingCount: 0, ongoingCount: 0,
+              completedCount: 0, cancelledCount: 0,
+              totalVolunteers: 0, totalDonated: 0,
+            }),
+            totalWaitlisted: waitlistedCount,    
+            totalParticipants: participantCount,
+          },
+          typeBreakdown,
+        });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
 
     //post method
 
