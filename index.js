@@ -1953,6 +1953,84 @@ async function run() {
       }
     });
 
+    // GET /admin/events/:id/manage
+    app.get("/admin/events/:id/manage", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const eventId = new ObjectId(req.params.id);
+
+        const event = await eventCollection.findOne({ _id: eventId });
+        if (!event) return res.status(404).json({ message: "Event not found" });
+
+        // Confirmed volunteers
+        const confirmed = await eventRegistrationCollection
+          .find({ eventId, status: "confirmed" })
+          .sort({ createdAt: 1 })
+          .toArray();
+
+        // Waitlist (sorted by position)
+        const waitlist = await eventRegistrationCollection
+          .find({ eventId, status: "waitlisted" })
+          .sort({ waitlistPosition: 1 })
+          .toArray();
+
+        // Paid donations
+        const donations = await donationCollection
+          .find({ eventId, paymentStatus: "paid" })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        // Stats
+        const [
+          attendedCount,
+          paidCount,
+          pendingPayment,
+          donorCount,
+          totalDonatedAgg,
+          commentCount,
+        ] = await Promise.all([
+          eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", attended: true }),
+          eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", paymentStatus: "paid" }),
+          eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", paymentStatus: "pending" }),
+          donationCollection.countDocuments({ eventId, paymentStatus: "paid" }),
+          donationCollection.aggregate([
+            { $match: { eventId, paymentStatus: "paid" } },
+            { $group: { _id: null, total: { $sum: "$amount" } } },
+          ]).toArray(),
+          // Replace commentCollection with your actual collection name if different
+          commentCollection
+            ? commentCollection.countDocuments({ eventId })
+            : Promise.resolve(0),
+        ]);
+
+        const totalDonated = totalDonatedAgg[0]?.total || 0;
+
+        res.json({
+          event,
+          confirmed,
+          waitlist,
+          donations,
+          stats: {
+            confirmedCount:  confirmed.length,
+            waitlistCount:   waitlist.length,
+            attendedCount,
+            paidCount,
+            pendingPayment,
+            donorCount,
+            totalDonated,
+            commentCount,
+          },
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
 
     //post method
 
