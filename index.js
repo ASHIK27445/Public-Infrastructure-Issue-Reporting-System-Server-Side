@@ -1820,6 +1820,139 @@ async function run() {
       }
     });
 
+    //get events info for admin
+    app.get("/admin/events", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const { status, type, search, page = 1, limit = 15 } = req.query;
+        const skip = (Number(page) - 1) * Number(limit);
+
+        const filter = {};
+        if (status && status !== "all") filter.status = status;
+        if (type   && type   !== "all") filter.eventType = type;
+        if (search) {
+          filter.$or = [
+            { title:              { $regex: search, $options: "i" } },
+            { "location.address": { $regex: search, $options: "i" } },
+          ];
+        }
+
+        const [events, total] = await Promise.all([
+          eventCollection.aggregate([
+            { $match: filter },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: Number(limit) },
+
+            // ✅ waitlistCount
+            {
+              $lookup: {
+                from: "eventRegistration",
+                let: { eid: "$_id" },
+                pipeline: [
+                  { $match: { $expr: { $and: [
+                    { $eq: ["$eventId", "$$eid"] },
+                    { $eq: ["$status", "waitlisted"] },
+                  ]}}},
+                  { $count: "count" },
+                ],
+                as: "waitlistData",
+              },
+            },
+            {
+              $addFields: {
+                waitlistCount: { $ifNull: [{ $arrayElemAt: ["$waitlistData.count", 0] }, 0] },
+              },
+            },
+
+            // ✅ guestCount from confirmed guests
+            {
+              $lookup: {
+                from: "eventRegistration",
+                let: { eid: "$_id" },
+                pipeline: [
+                  { $match: { $expr: { $and: [
+                    { $eq: ["$eventId", "$$eid"] },
+                    { $eq: ["$status", "confirmed"] },
+                    { $eq: ["$role", "guest"] },
+                  ]}}},
+                  { $count: "count" },
+                ],
+                as: "guestData",
+              },
+            },
+            {
+              $addFields: {
+                guestCount: { $ifNull: [{ $arrayElemAt: ["$guestData.count", 0] }, 0] },
+              },
+            },
+
+            // ✅ freeParticipantCount
+            {
+              $lookup: {
+                from: "participants",
+                let: { eid: "$_id" },
+                pipeline: [
+                  { $match: { $expr: { $eq: ["$eventId", "$$eid"] } } },
+                  { $count: "count" },
+                ],
+                as: "freeParticipantData",
+              },
+            },
+            {
+              $addFields: {
+                freeParticipantCount: { $ifNull: [{ $arrayElemAt: ["$freeParticipantData.count", 0] }, 0] },
+              },
+            },
+
+            // ✅ donationStats
+            {
+              $lookup: {
+                from: "donation",
+                let: { eid: "$_id" },
+                pipeline: [
+                  { $match: { $expr: { $and: [
+                    { $eq: ["$eventId", "$$eid"] },
+                    { $eq: ["$paymentStatus", "paid"] },
+                  ]}}},
+                  { $group: { _id: null, totalDonated: { $sum: "$amount" }, count: { $sum: 1 } } },
+                ],
+                as: "donationData",
+              },
+            },
+            {
+              $addFields: {
+                donationStats: {
+                  $ifNull: [
+                    { $arrayElemAt: ["$donationData", 0] },
+                    { totalDonated: 0, count: 0 }
+                  ]
+                },
+              },
+            },
+
+            { $project: { waitlistData: 0, guestData: 0, freeParticipantData: 0, donationData: 0 } },
+          ]).toArray(),
+
+          eventCollection.countDocuments(filter),
+        ]);
+
+        res.json({
+          success: true,
+          events,
+          total,
+          totalPages: Math.ceil(total / Number(limit)),
+          page: Number(page),
+        });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
 
     //post method
 
