@@ -3804,6 +3804,75 @@ async function run() {
       }
     });
 
+    // PATCH /admin/events/:id
+    app.patch("/admin/events/:id", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const eventId = new ObjectId(req.params.id);
+        const now = new Date();
+
+        const {
+          title,
+          description,
+          date,
+          endDate,
+          maxVolunteers,
+          registrationFee,
+          fundGoal,
+          isTshirt,
+          isGuestUnlimited,
+          guestNumber,
+          isFreeParticipate,
+          maxFreeParticipate,
+          equipmentList,
+          organizerContact,
+          coverImage,
+          pinnedAnnouncement,
+          location,
+        } = req.body;
+
+        const updateFields = {
+          updatedAt: now,
+        };
+
+        if (title              !== undefined) updateFields.title              = title;
+        if (description        !== undefined) updateFields.description        = description;
+        if (date    !== undefined) updateFields.date    = date    ? new Date(date)    : null;
+        if (endDate !== undefined) updateFields.endDate = endDate ? new Date(endDate) : null;
+        if (maxVolunteers      !== undefined) updateFields.maxVolunteers      = Number(maxVolunteers);
+        if (registrationFee    !== undefined) updateFields.registrationFee    = Number(registrationFee);
+        if (fundGoal           !== undefined) updateFields.fundGoal           = Number(fundGoal);
+        if (isTshirt           !== undefined) updateFields.isTshirt           = isTshirt;
+        if (isGuestUnlimited   !== undefined) updateFields.isGuestUnlimited   = isGuestUnlimited;
+        if (guestNumber        !== undefined) updateFields.guestNumber        = Number(guestNumber);
+        if (isFreeParticipate  !== undefined) updateFields.isFreeParticipate  = isFreeParticipate;
+        if (maxFreeParticipate !== undefined) updateFields.maxFreeParticipate = Number(maxFreeParticipate);
+        if (equipmentList      !== undefined) updateFields.equipmentList      = equipmentList;
+        if (organizerContact   !== undefined) updateFields.organizerContact   = organizerContact;
+        if (coverImage         !== undefined) updateFields.coverImage         = coverImage;
+        if (pinnedAnnouncement !== undefined) updateFields.pinnedAnnouncement = pinnedAnnouncement;
+        if (location           !== undefined) updateFields.location           = location;
+
+        const result = await eventCollection.updateOne(
+          { _id: eventId },
+          { $set: updateFields }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "Event not found" });
+        }
+
+        res.json({ success: true, message: "Event updated successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
     //------------------------------------------------------------------------------------//
     //delete method
     //------------------------------------------------------------------------------------//
