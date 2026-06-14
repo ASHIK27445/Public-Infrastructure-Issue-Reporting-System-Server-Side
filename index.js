@@ -3926,6 +3926,32 @@ async function run() {
 
       res.send({ success: true })
     })
+
+    //DELETE: Free Participate
+    app.delete("/admin/events/:eventId/free-participant/:participantId", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin") {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const { eventId, participantId } = req.params;
+
+        const result = await freeParticipateCollection.deleteOne({
+          _id: new ObjectId(participantId),
+          eventId: new ObjectId(eventId),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Participant not found" });
+        }
+
+        res.json({ success: true, message: "Participant removed" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
     
     //router
     //View Count Route(Simple)
