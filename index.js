@@ -3856,6 +3856,10 @@ async function run() {
         if (coverImage         !== undefined) updateFields.coverImage         = coverImage;
         if (pinnedAnnouncement !== undefined) updateFields.pinnedAnnouncement = pinnedAnnouncement;
         if (location           !== undefined) updateFields.location           = location;
+        if (req.body.eventLogs        !== undefined) updateFields.eventLogs        = req.body.eventLogs;
+        if (req.body.hasEventLogs     !== undefined) updateFields.hasEventLogs     = req.body.hasEventLogs;
+        if (req.body.specialGuests    !== undefined) updateFields.specialGuests    = req.body.specialGuests;
+        if (req.body.hasSpecialGuests !== undefined) updateFields.hasSpecialGuests = req.body.hasSpecialGuests;
 
         const result = await eventCollection.updateOne(
           { _id: eventId },
