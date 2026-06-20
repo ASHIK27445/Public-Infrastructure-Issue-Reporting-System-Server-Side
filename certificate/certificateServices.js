@@ -44,6 +44,7 @@ async function generateOneCertificate({
   browser,
   certificateCollection,
   eventRegistrationCollection,
+  signatureUrl = ""
 }) {
   const certId    = `CERT-${new Date().getFullYear()}-${uuidv4().slice(0, 4).toUpperCase()}`;
   const verifyUrl = `${BASE_URL}/verify/${certId}`;
@@ -149,7 +150,7 @@ async function generateOneCertificate({
 async function generateEventCertificates(
   event,
   attended,
-  { certificateCollection, eventRegistrationCollection }
+  { certificateCollection, eventRegistrationCollection, signatureUrl = '' }
 ) {
   const results = { success: [], failed: [], skipped: [] };
 
@@ -174,6 +175,7 @@ async function generateEventCertificates(
           browser,
           certificateCollection,
           eventRegistrationCollection,
+          signatureUrl
         });
         results.success.push({ name: reg.name, certId: cert.certId, email: reg.email });
       } catch (err) {
