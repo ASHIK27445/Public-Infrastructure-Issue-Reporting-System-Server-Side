@@ -94,6 +94,8 @@ async function generateOneCertificate({
       public_id:     certId,                              // becomes the filename
       overwrite:     false,
       type:          "upload",                            // publicly accessible URL
+      //type:        "authenticated"                      // private
+      // access_mode: 'public'                            //access public or private
     });
     pdfUrl              = uploadResult.secure_url;
     cloudinaryPublicId   = uploadResult.public_id;
