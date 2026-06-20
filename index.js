@@ -21,10 +21,10 @@ const {
 const {checkToxicity} = require('./checkToxicity')
 
 //certificate 
-const {
-  generateEventCertificates,
-  sendCertificateEmail,
-} = require("./certificate/certificateServices");
+// const {
+//   generateEventCertificates,
+//   sendCertificateEmail,
+// } = require("./certificate/certificateServices");
 
 const port = process.env.PORT
 
@@ -1960,6 +1960,42 @@ async function run() {
       }
     });
 
+    // Get a single event for admin
+    app.get("/admin/event/:id/detail", verifyFBToken, async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const event = await eventCollection.findOne(
+          { _id: new ObjectId(id) },
+          {
+            projection: {
+              title: 1,
+              date: 1,
+            },
+          }
+        );
+
+        if (!event) {
+          return res.status(404).json({
+            success: false,
+            message: "Event not found",
+          });
+        }
+
+        res.json({
+          success: true,
+          event,
+        });
+
+      } catch (err) {
+        res.status(500).json({
+          success: false,
+          message: "Server error",
+          error: err.message,
+        });
+      }
+    })
+
     // GET /admin/events/:id/manage
     app.get("/admin/events/:id/manage", verifyFBToken, async (req, res) => {
       try {
@@ -2080,6 +2116,80 @@ async function run() {
       } catch (error) {
         console.error(error);
         res.status(500).send({ success: false, message: "Failed to fetch certificate status" });
+      }
+    });
+
+    //GET: Live attendence scanner page
+    app.get("/events/:id/checkin/stats", verifyFBToken, async (req, res) => {
+      try {
+        const eventId = new ObjectId(req.params.id);
+  
+        const [total, attended, waitlisted] = await Promise.all([
+          eventRegistrationCollection.countDocuments({ eventId, status: "confirmed" }),
+          eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", attended: true }),
+          eventRegistrationCollection.countDocuments({ eventId, status: "waitlisted" }),
+        ]);
+  
+        // Recent check-ins — .select() → .project()
+        const recent = await eventRegistrationCollection
+          .find({ eventId, attended: true })
+          .sort({ attendedAt: -1 })
+          .limit(20)
+          .project({ name: 1, email: 1, role: 1, institution: 1, attendedAt: 1 })
+          .toArray();
+  
+        // Not yet checked in
+        const pending = await eventRegistrationCollection
+          .find({ eventId, status: "confirmed", attended: { $ne: true } })
+          .sort({ createdAt: 1 })
+          .project({ name: 1, email: 1, role: 1, institution: 1, paymentStatus: 1 })
+          .toArray();
+  
+        res.json({
+          stats: {
+            total,
+            attended,
+            pending:    total - attended,
+            waitlisted,
+            percentage: total > 0 ? Math.round((attended / total) * 100) : 0,
+          },
+          recent,
+          pending,
+        });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    })
+
+    //GET: Pre-check a QR token without marking attendance
+    app.get("/events/:id/checkin/verify/:qrToken", verifyFBToken, async (req, res) => {
+      try {
+        const eventId = new ObjectId(req.params.id);
+  
+        const reg = await eventRegistrationCollection.findOne({
+          eventId,
+          qrToken: req.params.qrToken,
+          status:  "confirmed",
+        });
+  
+        if (!reg)
+          return res.status(404).json({ found: false, message: "QR not found" });
+  
+        res.json({
+          found:    true,
+          attended: reg.attended,
+          volunteer: {
+            name:          reg.name,
+            email:         reg.email,
+            role:          reg.role,
+            institution:   reg.institution,
+            paymentStatus: reg.paymentStatus,
+            attended:      reg.attended,
+            attendedAt:    reg.attendedAt,
+          },
+        });
+      } catch (err) {
+        res.status(500).json({ message: "Server error" });
       }
     });
 
