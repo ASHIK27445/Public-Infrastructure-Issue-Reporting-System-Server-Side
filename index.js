@@ -3562,6 +3562,155 @@ async function run() {
       }
     });
     
+    // post events checking
+    app.post("/events/:id/checkin", verifyFBToken, async (req, res) => {
+      try {
+        const { qrToken } = req.body;
+        if (!qrToken?.trim())
+          return res.status(400).json({ message: "QR token is required" });
+  
+        const eventId = new ObjectId(req.params.id);
+        const event = await eventCollection.findOne({ _id: eventId });
+        if (!event) return res.status(404).json({ message: "Event not found" });
+  
+        if (!["upcoming", "ongoing"].includes(event.status))
+          return res.status(400).json({
+            message: `Check-in not allowed. Event is ${event.status}.`,
+          });
+  
+        // Only confirmed (non-waitlisted) registrations are eligible
+        const reg = await eventRegistrationCollection.findOne({
+          eventId,
+          qrToken:  qrToken.trim(),
+          status:   "confirmed",
+        });
+  
+        if (!reg)
+          return res.status(404).json({
+            success: false,
+            message: "QR code not found or volunteer is on waitlist.",
+            code:    "NOT_FOUND",
+          });
+  
+        if (reg.attended)
+          return res.status(409).json({
+            success:  false,
+            message:  `${reg.name} already checked in.`,
+            code:     "ALREADY_CHECKED_IN",
+            volunteer: {
+              name:        reg.name,
+              role:        reg.role,
+              institution: reg.institution,
+              attendedAt:  reg.attendedAt,
+            },
+          });
+  
+        // Block only if payment is genuinely pending on a paid event
+        if (reg.paymentStatus === "pending" && (event.registrationFee || 0) > 0)
+          return res.status(402).json({
+            success:  false,
+            message:  `${reg.name}'s registration fee (৳${event.registrationFee}) is unpaid.`,
+            code:     "PAYMENT_PENDING",
+            volunteer: { name: reg.name, email: reg.email },
+          });
+  
+        const now = new Date();
+        await eventRegistrationCollection.updateOne(
+          { _id: reg._id },
+          {
+            $set: {
+              attended:    true,
+              attendedAt:  now,
+              checkedInBy: req.decoded_email,
+              updatedAt:   now,
+            },
+          }
+        );
+  
+        res.json({
+          success:  true,
+          message:  `✅ Welcome, ${reg.name}!`,
+          code:     "CHECKED_IN",
+          volunteer: {
+            name:        reg.name,
+            email:       reg.email,
+            role:        reg.role,
+            institution: reg.institution,
+            ageGroup:    reg.ageGroup,
+            skills:      reg.skills,
+            attendedAt:  now,
+          },
+        });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
+
+    //post: event checking manually
+    app.post("/events/:id/checkin/manual", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin")
+          return res.status(403).json({ message: "Forbidden" });
+  
+        const { email } = req.body;
+        if (!email?.trim())
+          return res.status(400).json({ message: "Email is required" });
+  
+        const eventId = new ObjectId(req.params.id);
+        const event = await eventCollection.findOne({ _id: eventId });
+        if (!event) return res.status(404).json({ message: "Event not found" });
+  
+        const reg = await eventRegistrationCollection.findOne({
+          eventId,
+          email:  email.trim().toLowerCase(),
+          status: "confirmed",
+        });
+  
+        if (!reg)
+          return res.status(404).json({
+            success: false,
+            message: "No registration found for this email.",
+            code:    "NOT_FOUND",
+          });
+  
+        if (reg.attended)
+          return res.status(409).json({
+            success:  false,
+            message:  `${reg.name} is already checked in.`,
+            code:     "ALREADY_CHECKED_IN",
+            volunteer: { name: reg.name, attendedAt: reg.attendedAt },
+          });
+  
+        const now = new Date();
+        await eventRegistrationCollection.updateOne(
+          { _id: reg._id },
+          {
+            $set: {
+              attended:    true,
+              attendedAt:  now,
+              checkedInBy: req.decoded_email,
+              updatedAt:   now,
+            },
+          }
+        );
+  
+        res.json({
+          success:  true,
+          message:  `✅ ${reg.name} manually checked in.`,
+          code:     "CHECKED_IN",
+          volunteer: {
+            name:        reg.name,
+            email:       reg.email,
+            role:        reg.role,
+            institution: reg.institution,
+            attendedAt:  now,
+          },
+        });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
 
     //---------------------------------------------------------------------//
     //put/update method
@@ -4134,6 +4283,38 @@ async function run() {
         res.json({ success: true, message: "Participant removed" });
       } catch (err) {
         console.error(err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    })
+
+    //DELETE: UNDO Event Checking
+    app.delete("/events/:id/checkin/:regId", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin")
+          return res.status(403).json({ message: "Forbidden" });
+  
+        const regId = new ObjectId(req.params.regId);
+        const reg = await eventRegistrationCollection.findOne({ _id: regId });
+        if (!reg) return res.status(404).json({ message: "Registration not found" });
+  
+        await eventRegistrationCollection.updateOne(
+          { _id: regId },
+          {
+            $set: {
+              attended:    false,
+              attendedAt:  null,
+              checkedInBy: null,
+              updatedAt:   new Date(),
+            },
+          }
+        );
+  
+        res.json({
+          message: `Check-in undone for ${reg.name}`,
+          reg: { ...reg, attended: false, attendedAt: null, checkedInBy: null },
+        });
+      } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
       }
     });
