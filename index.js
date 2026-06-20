@@ -20,6 +20,12 @@ const {
 //toxicity Checker
 const {checkToxicity} = require('./checkToxicity')
 
+//certificate 
+const {
+  generateEventCertificates,
+  sendCertificateEmail,
+} = require("./certificate/certificateServices");
+
 const port = process.env.PORT
 
 const app = express()

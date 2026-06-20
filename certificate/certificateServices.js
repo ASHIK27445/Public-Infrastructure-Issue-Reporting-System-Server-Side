@@ -7,7 +7,7 @@ const fs           = require("fs");
 const nodemailer   = require("nodemailer");
 const cloudinary   = require("cloudinary").v2;
 
-const { generateCertificateHTML } = require("../certificate/certificateTemplate");
+const { generateCertificateHTML } = require("./certificateTemplate");
 
 const BASE_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const TEMP_DIR = path.join(__dirname, "../temp-certs");
