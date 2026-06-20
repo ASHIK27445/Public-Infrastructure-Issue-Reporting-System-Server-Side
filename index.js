@@ -3704,6 +3704,37 @@ async function run() {
         }
       }
     });
+
+    //POST: ADMIN  Resend one certificate email
+    app.post('/admin/events/:id/certificates/:certId/resend', verifyFBToken, async (req, res) => {
+      const { id: eventId, certId } = req.params;
+    
+      /*--------------------Admin check--------------------------*/
+      const adminUser = await userCollection.findOne({ email: req.decoded_email });
+      if (!adminUser || adminUser.role !== 'admin') {
+        return res.status(403).send({ message: "Forbidden! Admin access required" });
+      }
+    
+      try {
+        const cert = await certificateCollection.findOne({ certId });
+        if (!cert) {
+          return res.status(404).send({ success: false, message: "Certificate not found" });
+        }
+    
+        const event = await eventCollection.findOne({ _id: new ObjectId(eventId) });
+    
+        await sendCertificateEmail({
+          cert,
+          eventTitle: event?.title || cert.eventTitle,
+          certificateCollection,
+        });
+    
+        res.send({ success: true, message: `Certificate re-sent to ${cert.recipientEmail}` });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Failed to resend certificate" });
+      }
+    })
     
     // post events checking
     app.post("/events/:id/checkin", verifyFBToken, async (req, res) => {
