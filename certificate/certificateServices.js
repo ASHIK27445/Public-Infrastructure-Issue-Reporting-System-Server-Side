@@ -59,6 +59,7 @@ async function generateOneCertificate({
     certId,
     verifyUrl,
     issuedAt:      new Date(),
+    signatureUrl: signatureUrl || ""
   });
 
   // Render PDF locally (temporary, deleted right after upload)

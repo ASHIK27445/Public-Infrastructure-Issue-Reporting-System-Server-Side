@@ -3639,6 +3639,7 @@ async function run() {
     // Post: Admin generate certificate
     app.post('/admin/events/:id/certificates/generate', verifyFBToken, async (req, res) => {
       const eventId = req.params.id;
+      const { signatureUrl } = req.body;
     
       /*--------------------Admin check--------------------------*/
       const adminUser = await userCollection.findOne({ email: req.decoded_email });
@@ -3676,6 +3677,7 @@ async function run() {
         generateEventCertificates(event, attended, {
           certificateCollection,
           eventRegistrationCollection,
+          signatureUrl: signatureUrl || ""
         })
           .then(async (results) => {
             console.log(`✅ Certs: ${results.success.length} done, ${results.failed.length} failed, ${results.skipped.length} skipped`);

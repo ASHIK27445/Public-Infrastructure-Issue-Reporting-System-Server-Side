@@ -30,6 +30,7 @@ function generateCertificateHTML({
   certId,
   verifyUrl,
   issuedAt,
+  signatureUrl = ""
 }) {
   const color     = TYPE_COLOR[eventType] || TYPE_COLOR.meetup;
   const typeLabel = TYPE_LABEL[eventType] || "Community Event";
@@ -93,6 +94,7 @@ function generateCertificateHTML({
   .cid-val{font-family:'Courier New',monospace;font-size:10px;color:#334155;word-break:break-all;font-weight:600;}
   .verify-note{font-size:8px;color:#94a3b8;text-align:center;line-height:1.6;}
   .verify-url{font-size:8px;color:${color.primary};word-break:break-all;font-weight:600;}
+  .sig-img{max-height:55px;max-width:140px;object-fit:contain;margin-bottom:4px;}
 </style>
 </head>
 <body>
@@ -132,6 +134,7 @@ function generateCertificateHTML({
     </div>
     <div class="sigs">
       <div class="sig">
+        ${signatureUrl ? `<img class="sig-img" src="${signatureUrl}" alt="Signature"/>` : `<div style="height:55px"></div>`}
         <div class="sig-line"></div>
         <div class="sig-name">Event Organizer</div>
         <div class="sig-title">CommunityFix Admin</div>
