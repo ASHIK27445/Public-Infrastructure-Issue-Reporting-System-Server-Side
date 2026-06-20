@@ -2192,7 +2192,37 @@ async function run() {
       } catch (err) {
         res.status(500).json({ message: "Server error" });
       }
-    });
+    })
+
+    //GET:  Admin views all certificates for an event
+    app.get('/admin/events/:id/certificates', verifyFBToken, async (req, res) => {
+      const eventId = req.params.id;
+    
+      /*--------------------Admin check--------------------------*/
+      const adminUser = await userCollection.findOne({ email: req.decoded_email });
+      if (!adminUser || adminUser.role !== 'admin') {
+        return res.status(403).send({ message: "Forbidden! Admin access required" });
+      }
+    
+      try {
+        const certs = await certificateCollection
+          .find({ eventId: new ObjectId(eventId) })
+          .sort({ issuedAt: -1 })
+          .toArray();
+    
+        res.send({
+          certificates: certs,
+          stats: {
+            total:        certs.length,
+            emailSent:    certs.filter((c) => c.emailSent).length,
+            emailPending: certs.filter((c) => !c.emailSent).length,
+          },
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Failed to fetch certificates" });
+      }
+    })
 
 
     //post method
