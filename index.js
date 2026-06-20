@@ -112,6 +112,7 @@ async function run() {
     const eventRegistrationCollection = database.collection('eventRegistration')
     const donationCollection = database.collection('donation')
     const freeParticipateCollection = database.collection('participants')
+    const certificateCollection = database.collection('certificate')
 
     //get method
     app.get('/user/role/:email', async(req, res)=>{
@@ -2045,6 +2046,43 @@ async function run() {
       }
     });
 
+    //Get ADMIN: certificate status
+    app.get('/admin/events/:id/certificates/status', verifyFBToken, async (req, res) => {
+      const eventId = req.params.id;
+    
+      /*--------------------Admin check--------------------------*/
+      const adminUser = await userCollection.findOne({ email: req.decoded_email });
+      if (!adminUser || adminUser.role !== 'admin') {
+        return res.status(403).send({ message: "Forbidden! Admin access required" });
+      }
+    
+      try {
+        const attendedCount = await eventRegistrationCollection.countDocuments({
+          eventId:    new ObjectId(eventId),
+          waitlisted: false,
+          attended:   true,
+        });
+        const certCount = await certificateCollection.countDocuments({
+          eventId: new ObjectId(eventId),
+        });
+        const emailSentCount = await certificateCollection.countDocuments({
+          eventId:   new ObjectId(eventId),
+          emailSent: true,
+        });
+    
+        res.send({
+          attendedCount,
+          certCount,
+          emailSentCount,
+          pending: attendedCount - certCount,
+          ready:   certCount > 0,
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Failed to fetch certificate status" });
+      }
+    });
+
 
     //post method
 
@@ -3456,6 +3494,74 @@ async function run() {
         res.status(500).json({ message: "Server error", error: err.message });
       }
     });
+
+    // Post: Admin generate certificate
+    app.post('/admin/events/:id/certificates/generate', verifyFBToken, async (req, res) => {
+      const eventId = req.params.id;
+    
+      /*--------------------Admin check--------------------------*/
+      const adminUser = await userCollection.findOne({ email: req.decoded_email });
+      if (!adminUser || adminUser.role !== 'admin') {
+        return res.status(403).send({ message: "Forbidden! Admin access required" });
+      }
+    
+      try {
+        const event = await eventCollection.findOne({ _id: new ObjectId(eventId) });
+        if (!event) {
+          return res.status(404).send({ success: false, message: "Event not found" });
+        }
+        if (event.status !== "completed") {
+          return res.status(400).send({ success: false, message: "Only completed events can generate certificates" });
+        }
+    
+        const attended = await eventRegistrationCollection.find({
+          eventId:    new ObjectId(eventId),
+          waitlisted: false,
+          attended:   true,
+        }).toArray();
+    
+        if (attended.length === 0) {
+          return res.status(400).send({ success: false, message: "No attended volunteers found for this event" });
+        }
+    
+        // Respond immediately — heavy PDF work continues in the background
+        res.send({
+          success: true,
+          message: `Generating ${attended.length} certificates. Emails will be sent automatically.`,
+          total:   attended.length,
+        });
+    
+        // Background processing (fire and forget)
+        generateEventCertificates(event, attended, {
+          certificateCollection,
+          eventRegistrationCollection,
+        })
+          .then(async (results) => {
+            console.log(`✅ Certs: ${results.success.length} done, ${results.failed.length} failed, ${results.skipped.length} skipped`);
+    
+            for (const item of results.success) {
+              const cert = await certificateCollection.findOne({ certId: item.certId });
+              if (cert) {
+                try {
+                  await sendCertificateEmail({ cert, eventTitle: event.title, certificateCollection });
+                } catch (e) {
+                  console.error(`Email failed for ${item.email}:`, e.message);
+                }
+              }
+            }
+            console.log(`📧 Certificate emails sent: ${results.success.length}`);
+          })
+          .catch((e) => console.error("Batch cert generation error:", e.message));
+    
+      } catch (error) {
+        console.error(error);
+        // Note: response may already be sent above; only reachable if error happens before res.send
+        if (!res.headersSent) {
+          res.status(500).send({ success: false, message: "Failed to start certificate generation" });
+        }
+      }
+    });
+    
 
     //---------------------------------------------------------------------//
     //put/update method
