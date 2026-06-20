@@ -3708,6 +3708,7 @@ async function run() {
     //POST: ADMIN  Resend one certificate email
     app.post('/admin/events/:id/certificates/:certId/resend', verifyFBToken, async (req, res) => {
       const { id: eventId, certId } = req.params;
+      const { overrideEmail } = req.body;
     
       /*--------------------Admin check--------------------------*/
       const adminUser = await userCollection.findOne({ email: req.decoded_email });
@@ -3722,9 +3723,16 @@ async function run() {
         }
     
         const event = await eventCollection.findOne({ _id: new ObjectId(eventId) });
-    
+
+        //if it has override email
+        const certToSend = overrideEmail 
+        ? { ...cert, recipientEmail: overrideEmail }: cert;
+
+        console.log("certToSend.recipientEmail:", certToSend.recipientEmail); // ✅
+console.log("overrideEmail:", overrideEmail); // ✅
+
         await sendCertificateEmail({
-          cert,
+          cert: certToSend,
           eventTitle: event?.title || cert.eventTitle,
           certificateCollection,
         });
