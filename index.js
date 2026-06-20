@@ -21,10 +21,10 @@ const {
 const {checkToxicity} = require('./checkToxicity')
 
 //certificate 
-// const {
-//   generateEventCertificates,
-//   sendCertificateEmail,
-// } = require("./certificate/certificateServices");
+const {
+  generateEventCertificates,
+  sendCertificateEmail,
+} = require("./certificate/certificateServices");
 
 const port = process.env.PORT
 
@@ -1971,6 +1971,7 @@ async function run() {
             projection: {
               title: 1,
               date: 1,
+              status: 1
             },
           }
         );
@@ -2095,8 +2096,8 @@ async function run() {
       try {
         const attendedCount = await eventRegistrationCollection.countDocuments({
           eventId:    new ObjectId(eventId),
-          waitlisted: false,
           attended:   true,
+          waitlisted: { $ne: true },  // false or no field (both will cover)
         });
         const certCount = await certificateCollection.countDocuments({
           eventId: new ObjectId(eventId),
@@ -3626,7 +3627,7 @@ async function run() {
     
         const attended = await eventRegistrationCollection.find({
           eventId:    new ObjectId(eventId),
-          waitlisted: false,
+          waitlisted: { $ne: true },
           attended:   true,
         }).toArray();
     
@@ -3649,17 +3650,17 @@ async function run() {
           .then(async (results) => {
             console.log(`✅ Certs: ${results.success.length} done, ${results.failed.length} failed, ${results.skipped.length} skipped`);
     
-            for (const item of results.success) {
-              const cert = await certificateCollection.findOne({ certId: item.certId });
-              if (cert) {
-                try {
-                  await sendCertificateEmail({ cert, eventTitle: event.title, certificateCollection });
-                } catch (e) {
-                  console.error(`Email failed for ${item.email}:`, e.message);
-                }
-              }
-            }
-            console.log(`📧 Certificate emails sent: ${results.success.length}`);
+            // for (const item of results.success) {
+            //   const cert = await certificateCollection.findOne({ certId: item.certId });
+            //   if (cert) {
+            //     try {
+            //       await sendCertificateEmail({ cert, eventTitle: event.title, certificateCollection });
+            //     } catch (e) {
+            //       console.error(`Email failed for ${item.email}:`, e.message);
+            //     }
+            //   }
+            // }
+            // console.log(`📧 Certificate emails sent: ${results.success.length}`);
           })
           .catch((e) => console.error("Batch cert generation error:", e.message));
     
