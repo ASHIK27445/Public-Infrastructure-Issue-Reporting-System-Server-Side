@@ -1694,7 +1694,6 @@ async function run() {
         const registrations = await eventRegistrationCollection
           .find({ eventId, status: "confirmed" })
           .toArray();
-console.log(registrations)
         res.json({ success: true, registrations });
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
@@ -2145,17 +2144,31 @@ console.log(registrations)
           .sort({ createdAt: 1 })
           .project({ name: 1, email: 1, role: 1, institution: 1, paymentStatus: 1 })
           .toArray();
+
+        //free participant:
+        const freeParticipantsPending = await freeParticipateCollection
+          .find({eventId, attended:{$ne: true}})
+          .sort({createdAt: 1})
+          .project({name: 1, email:1, phone:1})
+          .toArray()
+
+        const freeParticipantsAttended = await freeParticipateCollection.countDocuments({
+          eventId, attended: true
+        })
   
         res.json({
           stats: {
             total,
             attended,
             pending:    total - attended,
+            freeParticipants: freeParticipantsPending.length,
             waitlisted,
-            percentage: total > 0 ? Math.round((attended / total) * 100) : 0,
+            percentage: total > 0 ? Math.round(((attended + freeParticipantsAttended) / (total + freeParticipantsPending.length)) * 100) : 0,
+            freeParticipantsAttended
           },
           recent,
           pending,
+          freeParticipantsPending
         });
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
@@ -3434,6 +3447,11 @@ console.log(registrations)
         const existing = await freeParticipateCollection.findOne({ eventId, phone });
         if (existing) {
           return res.status(409).json({ message: "This phone number is already registered" });
+        }
+
+        const existingByEmail = await freeParticipateCollection.findOne({ eventId, email });
+          if (existingByEmail) {
+            return res.status(409).json({ message: "This email is already registered" });
         }
 
         // Capacity check
