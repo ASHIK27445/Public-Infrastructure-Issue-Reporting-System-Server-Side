@@ -1694,7 +1694,7 @@ async function run() {
         const registrations = await eventRegistrationCollection
           .find({ eventId, status: "confirmed" })
           .toArray();
-
+console.log(registrations)
         res.json({ success: true, registrations });
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
@@ -2135,7 +2135,7 @@ async function run() {
         const recent = await eventRegistrationCollection
           .find({ eventId, attended: true })
           .sort({ attendedAt: -1 })
-          .limit(20)
+          .limit(200)
           .project({ name: 1, email: 1, role: 1, institution: 1, attendedAt: 1 })
           .toArray();
   
@@ -2221,6 +2221,20 @@ async function run() {
       } catch (error) {
         console.error(error);
         res.status(500).send({ success: false, message: "Failed to fetch certificates" });
+      }
+    })
+
+    app.get('/my-certificates', verifyFBToken, async (req, res) => {
+      try {
+        const certs = await certificateCollection
+          .find({ recipientEmail: req.decoded_email })
+          .sort({ issuedAt: -1 })
+          .toArray();
+    
+        res.send({ certificates: certs, total: certs.length });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Failed to fetch your certificates" });
       }
     })
 
