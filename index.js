@@ -2168,6 +2168,12 @@ async function run() {
         const freeParticipantsAttended = await freeParticipateCollection.countDocuments({
           eventId, attended: true
         })
+
+        // volunteer vs guest breakdown
+        const volunteerCount = await eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", role: "volunteer" });
+        const guestCount = await eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", role: "guest" });
+        const volunteerAttended = await eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", role: "volunteer", attended: true });
+        const guestAttended = await eventRegistrationCollection.countDocuments({ eventId, status: "confirmed", role: "guest", attended: true });
   
         res.json({
           stats: {
@@ -2177,11 +2183,15 @@ async function run() {
             freeParticipants: freeParticipantsPending.length,
             waitlisted,
             percentage: total > 0 ? Math.round(((attended + freeParticipantsAttended) / (total + freeParticipantsPending.length)) * 100) : 0,
-            freeParticipantsAttended
+            freeParticipantsAttended,
+            volunteerCount,
+            guestCount,
+            volunteerAttended,
+            guestAttended,
           },
           recent,
           pending,
-          freeParticipantsPending
+          freeParticipantsPending,
         });
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
