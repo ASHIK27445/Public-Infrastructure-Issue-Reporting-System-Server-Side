@@ -2172,7 +2172,7 @@ async function run() {
         res.json({
           stats: {
             total,
-            attended,
+            attended: attended + freeParticipantsAttended,
             pending:    total - attended,
             freeParticipants: freeParticipantsPending.length,
             waitlisted,
