@@ -2130,13 +2130,26 @@ async function run() {
           eventRegistrationCollection.countDocuments({ eventId, status: "waitlisted" }),
         ]);
   
-        // Recent check-ins — .select() → .project()
-        const recent = await eventRegistrationCollection
-          .find({ eventId, attended: true })
-          .sort({ attendedAt: -1 })
-          .limit(200)
-          .project({ name: 1, email: 1, role: 1, institution: 1, attendedAt: 1 })
-          .toArray();
+        // Recent check-ins from both collections
+        const [recentReg, recentFree] = await Promise.all([
+          eventRegistrationCollection
+            .find({ eventId, attended: true })
+            .sort({ attendedAt: -1 })
+            .limit(200)
+            .project({ name: 1, email: 1, role: 1, institution: 1, attendedAt: 1 })
+            .toArray(),
+          freeParticipateCollection
+            .find({ eventId, attended: true })
+            .sort({ attendedAt: -1 })
+            .limit(200)
+            .project({ name: 1, email: 1, phone: 1, attendedAt: 1 })
+            .toArray(),
+        ]);
+
+        // Merge and sort by attendedAt desc
+        const recent = [...recentReg, ...recentFree.map(p => ({ ...p, role: "participant" }))]
+          .sort((a, b) => new Date(b.attendedAt) - new Date(a.attendedAt))
+          .slice(0, 200);
   
         // Not yet checked in
         const pending = await eventRegistrationCollection
