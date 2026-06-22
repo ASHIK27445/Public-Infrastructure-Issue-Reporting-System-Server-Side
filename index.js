@@ -3880,47 +3880,83 @@ console.log("overrideEmail:", overrideEmail); // ✅
           email:  email.trim().toLowerCase(),
           status: "confirmed",
         });
-  
-        if (!reg)
+
+        const now = new Date();
+        
+        if(reg){
+          if (!reg)
+            return res.status(404).json({
+              success: false,
+              message: "No registration found for this email.",
+              code:    "NOT_FOUND",
+            });
+    
+          if (reg.attended)
+            return res.status(409).json({
+              success:  false,
+              message:  `${reg.name} is already checked in.`,
+              code:     "ALREADY_CHECKED_IN",
+              volunteer: { name: reg.name, attendedAt: reg.attendedAt },
+            });
+    
+          await eventRegistrationCollection.updateOne(
+            { _id: reg._id },
+            {
+              $set: {
+                attended:    true,
+                attendedAt:  now,
+                checkedInBy: req.decoded_email,
+                updatedAt:   now,
+              },
+            }
+          );
+    
+          res.json({
+            success:  true,
+            message:  `✅ ${reg.name} manually checked in.`,
+            code:     "CHECKED_IN",
+            volunteer: {
+              name:        reg.name,
+              email:       reg.email,
+              role:        reg.role,
+              institution: reg.institution,
+              attendedAt:  now,
+            },
+          });
+        }
+        // Fallback: check freeParticipateCollection
+        const freeReg = await freeParticipateCollection.findOne({
+          eventId,
+          email: email.trim().toLowerCase(),
+        });
+
+        if (!freeReg)
           return res.status(404).json({
             success: false,
             message: "No registration found for this email.",
-            code:    "NOT_FOUND",
+            code: "NOT_FOUND",
           });
-  
-        if (reg.attended)
+
+        if (freeReg.attended)
           return res.status(409).json({
-            success:  false,
-            message:  `${reg.name} is already checked in.`,
-            code:     "ALREADY_CHECKED_IN",
-            volunteer: { name: reg.name, attendedAt: reg.attendedAt },
+            success: false,
+            message: `${freeReg.name} is already checked in.`,
+            code: "ALREADY_CHECKED_IN",
+            volunteer: { name: freeReg.name, attendedAt: freeReg.attendedAt },
           });
-  
-        const now = new Date();
-        await eventRegistrationCollection.updateOne(
-          { _id: reg._id },
-          {
-            $set: {
-              attended:    true,
-              attendedAt:  now,
-              checkedInBy: req.decoded_email,
-              updatedAt:   now,
-            },
-          }
+
+        await freeParticipateCollection.updateOne(
+          { _id: freeReg._id },
+          { $set: { attended: true, attendedAt: now, checkedInBy: req.decoded_email, updatedAt: now } }
         );
-  
-        res.json({
-          success:  true,
-          message:  `✅ ${reg.name} manually checked in.`,
-          code:     "CHECKED_IN",
-          volunteer: {
-            name:        reg.name,
-            email:       reg.email,
-            role:        reg.role,
-            institution: reg.institution,
-            attendedAt:  now,
-          },
-        });
+
+        return res.json({
+          success: true,
+          message: `✅ ${freeReg.name} manually checked in.`,
+          code: "CHECKED_IN",
+          volunteer: { name: freeReg.name, email: freeReg.email, role: "participant", attendedAt: now },
+        })
+
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
       }
