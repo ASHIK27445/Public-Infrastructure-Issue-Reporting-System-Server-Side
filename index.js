@@ -2269,6 +2269,7 @@ async function run() {
       }
     })
 
+    // GET: logged user will get to see the certificate
     app.get('/my-certificates', verifyFBToken, async (req, res) => {
       try {
         const certs = await certificateCollection
@@ -2280,6 +2281,41 @@ async function run() {
       } catch (error) {
         console.error(error);
         res.status(500).send({ success: false, message: "Failed to fetch your certificates" });
+      }
+    })
+
+    //GET: Anyone can verify a certificate by ID
+    app.get('/verify/:certId', async (req, res) => {
+      const { certId } = req.params;
+    
+      try {
+        const cert = await certificateCollection.findOne({ certId });
+    
+        if (!cert) {
+          return res.status(404).send({
+            valid:   false,
+            message: "Certificate not found. Please check the ID and try again.",
+          });
+        }
+    
+        res.send({
+          valid: true,
+          certificate: {
+            certId:        cert.certId,
+            recipientName: cert.recipientName,
+            eventTitle:    cert.eventTitle,
+            eventType:     cert.eventType,
+            eventDate:     cert.eventDate,
+            eventAddress:  cert.eventAddress,
+            role:          cert.role,
+            institution:   cert.institution,
+            issuedAt:      cert.issuedAt,
+            pdfUrl:        cert.pdfUrl || null,
+          },
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ valid: false, message: "Server error" });
       }
     })
 
