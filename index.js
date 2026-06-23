@@ -4634,6 +4634,41 @@ console.log("overrideEmail:", overrideEmail); // ✅
         res.status(500).json({ message: "Server error", error: err.message });
       }
     });
+
+    //DELETE: Waitlist 
+    app.delete("/events/:id/waitlist/:regId", verifyFBToken, async (req, res) => {
+      try {
+        const adminUser = await userCollection.findOne({ email: req.decoded_email });
+        if (!adminUser || adminUser.role !== "admin")
+          return res.status(403).json({ message: "Forbidden" });
+
+        const eventId = new ObjectId(req.params.id);
+        const regId = new ObjectId(req.params.regId);
+
+        const reg = await eventRegistrationCollection.findOne({ _id: regId, eventId, status: "waitlisted" });
+        if (!reg)
+          return res.status(404).json({ message: "Waitlist registration not found" });
+
+        await eventRegistrationCollection.deleteOne({ _id: regId });
+
+        // waitlist position reorder
+        const remaining = await eventRegistrationCollection
+          .find({ eventId, status: "waitlisted" })
+          .sort({ waitlistPosition: 1 })
+          .toArray();
+
+        for (let i = 0; i < remaining.length; i++) {
+          await eventRegistrationCollection.updateOne(
+            { _id: remaining[i]._id },
+            { $set: { waitlistPosition: i + 1 } }
+          );
+        }
+
+        res.json({ success: true, message: `${reg.name} removed from waitlist` });
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    })
     
     //router
     //View Count Route(Simple)
