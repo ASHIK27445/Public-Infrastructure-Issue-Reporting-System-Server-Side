@@ -3821,6 +3821,8 @@ console.log("overrideEmail:", overrideEmail); // ✅
           qrToken:  qrToken.trim(),
           status:   "confirmed",
         });
+
+        const now = new Date();
   
         if (!reg)
           return res.status(404).json({
@@ -3828,56 +3830,84 @@ console.log("overrideEmail:", overrideEmail); // ✅
             message: "QR code not found or volunteer is on waitlist.",
             code:    "NOT_FOUND",
           });
-  
-        if (reg.attended)
-          return res.status(409).json({
-            success:  false,
-            message:  `${reg.name} already checked in.`,
-            code:     "ALREADY_CHECKED_IN",
+
+        if(reg){
+          if (reg.attended)
+            return res.status(409).json({
+              success:  false,
+              message:  `${reg.name} already checked in.`,
+              code:     "ALREADY_CHECKED_IN",
+              volunteer: {
+                name:        reg.name,
+                role:        reg.role,
+                institution: reg.institution,
+                attendedAt:  reg.attendedAt,
+              },
+            });
+    
+          // Block only if payment is genuinely pending on a paid event
+          if (reg.paymentStatus === "pending" && (event.registrationFee || 0) > 0)
+            return res.status(402).json({
+              success:  false,
+              message:  `${reg.name}'s registration fee (৳${event.registrationFee}) is unpaid.`,
+              code:     "PAYMENT_PENDING",
+              volunteer: { name: reg.name, email: reg.email },
+            });
+    
+          await eventRegistrationCollection.updateOne(
+            { _id: reg._id },
+            {
+              $set: {
+                attended:    true,
+                attendedAt:  now,
+                checkedInBy: req.decoded_email,
+                updatedAt:   now,
+              },
+            }
+          );
+    
+          res.json({
+            success:  true,
+            message:  `✅ Welcome, ${reg.name}!`,
+            code:     "CHECKED_IN",
             volunteer: {
               name:        reg.name,
+              email:       reg.email,
               role:        reg.role,
               institution: reg.institution,
-              attendedAt:  reg.attendedAt,
-            },
-          });
-  
-        // Block only if payment is genuinely pending on a paid event
-        if (reg.paymentStatus === "pending" && (event.registrationFee || 0) > 0)
-          return res.status(402).json({
-            success:  false,
-            message:  `${reg.name}'s registration fee (৳${event.registrationFee}) is unpaid.`,
-            code:     "PAYMENT_PENDING",
-            volunteer: { name: reg.name, email: reg.email },
-          });
-  
-        const now = new Date();
-        await eventRegistrationCollection.updateOne(
-          { _id: reg._id },
-          {
-            $set: {
-              attended:    true,
+              ageGroup:    reg.ageGroup,
+              skills:      reg.skills,
               attendedAt:  now,
-              checkedInBy: req.decoded_email,
-              updatedAt:   now,
             },
-          }
-        );
-  
-        res.json({
-          success:  true,
-          message:  `✅ Welcome, ${reg.name}!`,
-          code:     "CHECKED_IN",
-          volunteer: {
-            name:        reg.name,
-            email:       reg.email,
-            role:        reg.role,
-            institution: reg.institution,
-            ageGroup:    reg.ageGroup,
-            skills:      reg.skills,
-            attendedAt:  now,
-          },
+          })
+        }
+
+        // ── freeParticipateCollection fallback ──
+        const freeReg = await freeParticipateCollection.findOne({
+          eventId, qrToken: qrToken.trim(),
         });
+
+        if (!freeReg)
+          return res.status(404).json({
+            success: false, message: "QR code not found.", code: "NOT_FOUND",
+          });
+
+        if (freeReg.attended)
+          return res.status(409).json({
+            success: false, message: `${freeReg.name} already checked in.`,
+            code: "ALREADY_CHECKED_IN",
+            volunteer: { name: freeReg.name, role: "participant", attendedAt: freeReg.attendedAt },
+          });
+
+        await freeParticipateCollection.updateOne(
+          { _id: freeReg._id },
+          { $set: { attended: true, attendedAt: now, checkedInBy: req.decoded_email, updatedAt: now } }
+        );
+
+        return res.json({
+          success: true, message: `✅ Welcome, ${freeReg.name}!`, code: "CHECKED_IN",
+          volunteer: { name: freeReg.name, email: freeReg.email, phone: freeReg.phone, role: "participant", attendedAt: now },
+        })
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
       }
@@ -4566,27 +4596,31 @@ console.log("overrideEmail:", overrideEmail); // ✅
         const adminUser = await userCollection.findOne({ email: req.decoded_email });
         if (!adminUser || adminUser.role !== "admin")
           return res.status(403).json({ message: "Forbidden" });
-  
+
         const regId = new ObjectId(req.params.regId);
+
+        // eventRegistrationCollection check
         const reg = await eventRegistrationCollection.findOne({ _id: regId });
-        if (!reg) return res.status(404).json({ message: "Registration not found" });
-  
-        await eventRegistrationCollection.updateOne(
+        if (reg) {
+          await eventRegistrationCollection.updateOne(
+            { _id: regId },
+            { $set: { attended: false, attendedAt: null, checkedInBy: null, updatedAt: new Date() } }
+          );
+          return res.json({ message: `Check-in undone for ${reg.name}` });
+        }
+
+        // freeParticipateCollection fallback
+        const freeReg = await freeParticipateCollection.findOne({ _id: regId });
+        if (!freeReg)
+          return res.status(404).json({ message: "Registration not found" });
+
+        await freeParticipateCollection.updateOne(
           { _id: regId },
-          {
-            $set: {
-              attended:    false,
-              attendedAt:  null,
-              checkedInBy: null,
-              updatedAt:   new Date(),
-            },
-          }
+          { $set: { attended: false, attendedAt: null, checkedInBy: null, updatedAt: new Date() } }
         );
-  
-        res.json({
-          message: `Check-in undone for ${reg.name}`,
-          reg: { ...reg, attended: false, attendedAt: null, checkedInBy: null },
-        });
+
+        res.json({ message: `Check-in undone for ${freeReg.name}` });
+
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
       }
