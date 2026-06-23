@@ -1686,15 +1686,24 @@ async function run() {
     app.get("/events/:id/volunteers", verifyFBToken, async (req, res) => {
       try {
         const adminUser = await userCollection.findOne({ email: req.decoded_email });
-        if (!adminUser || adminUser.role !== "admin") {
+        if (!adminUser || adminUser.role !== "admin")
           return res.status(403).json({ message: "Forbidden" });
-        }
 
         const eventId = new ObjectId(req.params.id);
-        const registrations = await eventRegistrationCollection
-          .find({ eventId, status: "confirmed" })
-          .toArray();
-        res.json({ success: true, registrations });
+
+        const [registrations, freeParticipants] = await Promise.all([
+          eventRegistrationCollection.find({ eventId, status: "confirmed" }).toArray(),
+          freeParticipateCollection.find({ eventId }).toArray(),
+        ]);
+
+        const freeFormatted = freeParticipants.map(p => ({
+          ...p,
+          role: "participant",
+          paymentStatus: "not-required",
+          isFreeParticipant: true,
+        }));
+
+        res.json({ success: true, registrations: [...registrations, ...freeFormatted] });
       } catch (err) {
         res.status(500).json({ message: "Server error", error: err.message });
       }
