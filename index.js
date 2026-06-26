@@ -829,7 +829,7 @@ async function run() {
       const amount = session.amount_total;
       const boostType = metadata.type;
 
-      console.log(issueId)
+      // console.log(issueId)
 
       /**-------------------------User Verification---------------------- */
       const user = await userCollection.findOne({_id: new ObjectId(userId)});
@@ -3557,10 +3557,10 @@ async function run() {
             eventAddress: event.location?.address,
             qrToken,
           });
-          console.log(email)
+          // console.log(email)
         } catch (emailErr) {
-          console.log(emailErr)
-          console.error("Email error:", emailErr.message);
+          // console.log(emailErr)
+          // console.error("Email error:", emailErr.message);
         }
 
         return res.status(201).json({
@@ -3780,7 +3780,7 @@ async function run() {
           signatureUrl: signatureUrl || ""
         })
           .then(async (results) => {
-            console.log(`✅ Certs: ${results.success.length} done, ${results.failed.length} failed, ${results.skipped.length} skipped`);
+            // console.log(`✅ Certs: ${results.success.length} done, ${results.failed.length} failed, ${results.skipped.length} skipped`);
     
             // for (const item of results.success) {
             //   const cert = await certificateCollection.findOne({ certId: item.certId });
@@ -3828,8 +3828,8 @@ async function run() {
         const certToSend = overrideEmail 
         ? { ...cert, recipientEmail: overrideEmail }: cert;
 
-        console.log("certToSend.recipientEmail:", certToSend.recipientEmail); // ✅
-console.log("overrideEmail:", overrideEmail); // ✅
+        // console.log("certToSend.recipientEmail:", certToSend.recipientEmail); 
+        // console.log("overrideEmail:", overrideEmail);
 
         await sendCertificateEmail({
           cert: certToSend,
@@ -4736,5 +4736,5 @@ app.get('/', (req, res)=>{
 setupCommentSummaryRoute(app, model, verifyFBToken);
 
 app.listen(port, ()=>{
-    console.log(`App is running on the port ${port}`)
+    console.log(`App is running`)
 })
