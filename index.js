@@ -1,12 +1,12 @@
-require('dotenv').config()
-const express = require('express')
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const cors = require('cors')
-const stripe = require('stripe')(process.env.stripe_secretKey)
-const { setupCommentSummaryRoute } = require('./googlegenerativeai');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { v4: uuidv4 } = require('uuid')
-const { 
+import dotenv from 'dotenv';
+import express from 'express';
+import { MongoClient, ServerApiVersion, ObjectId } from 'mongodb';
+import cors from 'cors';
+import stripePackage from 'stripe';
+import { setupCommentSummaryRoute } from './googlegenerativeai.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { v4 as uuidv4 } from 'uuid';
+import { 
   sendRegistrationConfirmation, 
   sendPaymentConfirmationEmail,
   sendFreeRegistrationConfirmationEmail,
@@ -15,24 +15,22 @@ const {
   sendWaitlistPromotion,
   sendEventReminder,
   sendDonorThankYou
-} = require("./emailService")
-
-//toxicity Checker
-const {checkToxicity} = require('./checkToxicity')
-
-//certificate 
-const {
+} from './emailService.js';
+import { checkToxicity } from './checkToxicity.js';
+import {
   generateEventCertificates,
   sendCertificateEmail,
-} = require("./certificate/certificateServices");
+} from './certificate/certificateServices.js';
+import admin from 'firebase-admin';
 
-const port = process.env.PORT
+dotenv.config();
 
-const app = express()
-app.use(cors())
-app.use(express.json())
+const port = process.env.PORT;
+const app = express();
+const stripe = stripePackage(process.env.stripe_secretKey);
 
-const admin = require("firebase-admin")
+app.use(cors());
+app.use(express.json());
 
 const decoded = Buffer.from(process.env.FB_KEY, 'base64').toString('utf8')
 const serviceAccount = JSON.parse(decoded);

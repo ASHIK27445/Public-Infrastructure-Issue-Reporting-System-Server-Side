@@ -19,7 +19,7 @@ const TYPE_EMOJI = {
   awareness: "📢", student: "🎓", meetup: "🤝",
 };
 
-function generateCertificateHTML({
+export function generateCertificateHTML({
   recipientName,
   eventTitle,
   eventType    = "meetup",
@@ -163,5 +163,3 @@ function generateCertificateHTML({
 </body>
 </html>`;
 }
-
-module.exports = { generateCertificateHTML };

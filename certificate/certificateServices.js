@@ -1,17 +1,21 @@
-// Pass in `certificateCollection` and `eventRegistrationCollection` from index.js
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
+import { v4 as uuidv4 } from "uuid";
+import path from "path"
+import fs from "fs"
+import nodemailer from "nodemailer"
+import { v2 as cloudinary } from "cloudinary";
+import { generateCertificateHTML } from "./certificateTemplate.js";
+import { fileURLToPath } from "url";
 
-const puppeteer    = require("puppeteer");
-const { v4: uuidv4 } = require("uuid");
-const path         = require("path");
-const fs           = require("fs");
-const nodemailer   = require("nodemailer");
-const cloudinary   = require("cloudinary").v2;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
-const { generateCertificateHTML } = require("./certificateTemplate");
-
-const BASE_URL = process.env.CLIENT_URL || "http://localhost:5173";
-const TEMP_DIR = path.join(__dirname, "../temp-certs");
+const BASE_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+// It will work on vercel
+const TEMP_DIR = process.env.VERCEL ? "/tmp" : path.join(__dirname, "../temp-certs");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
 
 /* ─────────────────────────────────────────────
    CLOUDINARY CONFIG
@@ -67,8 +71,10 @@ async function generateOneCertificate({
   const tmpPath    = path.join(TEMP_DIR, `${certId}.pdf`);
   const ownBrowser = !browser;
   const br = browser || await puppeteer.launch({
-    headless: "new",
-    args:     ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
   });
 
   try {
@@ -155,8 +161,10 @@ async function generateEventCertificates(
   const results = { success: [], failed: [], skipped: [] };
 
   const browser = await puppeteer.launch({
-    headless: "new",
-    args:     ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
   });
 
   try {
@@ -257,7 +265,7 @@ async function sendCertificateEmail({ cert, eventTitle, certificateCollection })
   );
 }
 
-module.exports = {
+export {
   generateOneCertificate,
   generateEventCertificates,
   sendCertificateEmail,

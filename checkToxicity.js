@@ -1,4 +1,4 @@
-const checkToxicity = (text) =>{
+export const checkToxicity = (text) =>{
       try {
         // Toxic keywords list (English + Bangla)
         const toxicKeywords = [
@@ -46,5 +46,3 @@ const checkToxicity = (text) =>{
         }
       }
 }
-
-module.exports = {checkToxicity}

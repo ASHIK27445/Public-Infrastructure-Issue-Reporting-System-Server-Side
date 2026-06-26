@@ -1,5 +1,4 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
+import { GoogleGenerativeAI } from "@google/generative-ai";
 // Rate limiting and queue management
 let isProcessingSummary = false;
 const requestQueue = [];
@@ -113,7 +112,7 @@ const startCacheCleaner = () => {
 };
 
 // Main function to setup the route
-const setupCommentSummaryRoute = (app, model, verifyFBToken) => {
+export const setupCommentSummaryRoute = (app, model, verifyFBToken) => {
   // Start cache cleaner
   startCacheCleaner();
   
@@ -179,5 +178,3 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     }
   });
 };
-
-module.exports = { setupCommentSummaryRoute };

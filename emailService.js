@@ -1,5 +1,6 @@
-const nodemailer = require("nodemailer");
-const QRCode = require("qrcode");
+import nodemailer from 'nodemailer'
+import QRCode from 'qrcode'
+
 /* ─────────────────────────────────────────────
    TRANSPORTER SETUP
    .env variables needed:
@@ -211,7 +212,7 @@ const baseTemplate = (content) => `
 /* ─────────────────────────────────────────────
    1. VOLUNTEER REGISTRATION CONFIRMATION & PAYMENT CONFIRMATION MAIL
 ───────────────────────────────────────────── */
-const sendRegistrationConfirmation = async ({
+export const sendRegistrationConfirmation = async ({
   to, name, eventTitle, eventDate, eventAddress,
   eventType, qrToken, role, registrationFee, paymentLink,
 }) => {
@@ -281,7 +282,7 @@ const sendRegistrationConfirmation = async ({
   });
 };
 
-const sendFreeRegistrationConfirmationEmail = async ({
+export const sendFreeRegistrationConfirmationEmail = async ({
   to, name, eventTitle, eventDate, eventAddress,
   eventType, role, qrToken,
 }) => {
@@ -351,7 +352,7 @@ const sendFreeRegistrationConfirmationEmail = async ({
   });
 };
 
-const sendPaymentConfirmationEmail = async ({
+export const sendPaymentConfirmationEmail = async ({
   to, name, eventTitle, eventDate, eventAddress, amount, qrToken,
 }) => {
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
@@ -403,7 +404,7 @@ const sendPaymentConfirmationEmail = async ({
   });
 };
 
-const sendFreeParticipationConfirmation = async ({
+export const sendFreeParticipationConfirmation = async ({
   to,
   name,
   eventTitle,
@@ -528,7 +529,7 @@ const sendFreeParticipationConfirmation = async ({
 /* ─────────────────────────────────────────────
    2. WAITLIST CONFIRMATION
 ───────────────────────────────────────────── */
-const sendWaitlistConfirmation = async ({
+export const sendWaitlistConfirmation = async ({
   to, name, eventTitle, eventDate, eventAddress, waitlistPosition,
 }) => {
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
@@ -568,7 +569,7 @@ const sendWaitlistConfirmation = async ({
 /* ─────────────────────────────────────────────
    3. WAITLIST → SPOT OPENED NOTIFICATION
 ───────────────────────────────────────────── */
-const sendWaitlistPromotion = async ({
+export const sendWaitlistPromotion = async ({
   to, name, eventTitle, eventDate, eventAddress, qrToken, paymentLink, registrationFee,
 }) => {
   const formattedDate = new Date(eventDate).toLocaleDateString("en-BD", {
@@ -622,7 +623,7 @@ const sendWaitlistPromotion = async ({
 /* ─────────────────────────────────────────────
    4. EVENT REMINDER (send 24h before)
 ───────────────────────────────────────────── */
-const sendEventReminder = async ({
+export const sendEventReminder = async ({
   to, name, eventTitle, eventDate, eventAddress, qrToken, equipmentList,
 }) => {
   const formattedTime = new Date(eventDate).toLocaleTimeString("en-BD", {
@@ -676,7 +677,7 @@ const sendEventReminder = async ({
 /* ─────────────────────────────────────────────
    5. DONOR THANK-YOU
 ───────────────────────────────────────────── */
-const sendDonorThankYou = async ({ to, name, eventTitle, amount }) => {
+export const sendDonorThankYou = async ({ to, name, eventTitle, amount }) => {
   const content = `
     <h1>Thank you</h1>
     <p>Hi <strong>${name}</strong>, we’ve received your donation for <strong>${eventTitle}</strong>.</p>
@@ -710,15 +711,4 @@ const sendDonorThankYou = async ({ to, name, eventTitle, amount }) => {
     subject: `Thank you for your support — ${eventTitle}`,
     html: baseTemplate(content),
   });
-};
-
-module.exports = {
-  sendRegistrationConfirmation,
-  sendPaymentConfirmationEmail,
-  sendFreeRegistrationConfirmationEmail,
-  sendWaitlistConfirmation,
-  sendWaitlistPromotion,
-  sendEventReminder,
-  sendDonorThankYou,
-  sendFreeParticipationConfirmation
 };
