@@ -11,6 +11,9 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Firebase](https://img.shields.io/badge/Firebase-039BE5?style=for-the-badge&logo=Firebase&logoColor=white)](https://firebase.google.com/)
 [![Stripe](https://img.shields.io/badge/Stripe-626CD9?style=for-the-badge&logo=Stripe&logoColor=white)](https://stripe.com/)
+[![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=Cloudinary&logoColor=white)](https://cloudinary.com/)
+[![Socket.io](https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=Socket.io&logoColor=white)](https://socket.io/)
+[![Puppeteer](https://img.shields.io/badge/Puppeteer-40B5A4?style=for-the-badge&logo=Puppeteer&logoColor=white)](https://pptr.dev/)
 
 [Features](#features) • [Technology Stack](#technology-stack) • [API Documentation](#api-documentation) • [Contributing](#contributing)
 
@@ -39,10 +42,12 @@
 
 PIIRS (Public Issue and Information Reporting System) is a comprehensive civic technology platform that bridges the gap between citizens and government. Built in 2025-2026, it provides a transparent, accountable, and efficient system for reporting, tracking, and resolving public issues.
 
+The platform now extends beyond issue reporting to include a full **Community Event & Volunteer Management System** — enabling citizens to join events, receive QR-based attendance tokens, donate to event fund goals, earn digitally verifiable participation certificates, and engage through AI-summarized discussions.
+
 The platform serves three primary user groups:
-- **Citizens** who report and track public issues
-- **Government Staff** who receive and resolve issues
-- **Administrators** who manage the system and analyze data
+- **Citizens** who report issues, join events, and earn certificates
+- **Government Staff** who receive, resolve issues, and check in event attendees
+- **Administrators** who manage the entire system, events, and data analytics
 
 ---
 
@@ -86,12 +91,14 @@ PIIRS addresses these challenges by providing:
 - Real-time status tracking and notifications
 - Community engagement through upvoting and commenting
 - Complete transparency from submission to resolution
+- Event participation with QR attendance and digital certificates
 
 **For Government Staff:**
 - Centralized issue queue with priority-based assignment
 - Mobile-friendly interface for field updates
 - Performance tracking and workload management
 - Direct communication with citizens
+- Mobile QR scanner for event day attendance
 
 **For Administrators:**
 - Comprehensive analytics dashboard
@@ -99,6 +106,7 @@ PIIRS addresses these challenges by providing:
 - Budget impact analysis
 - Geographic heat mapping of issues
 - Data-driven resource allocation
+- Complete event lifecycle management
 
 ---
 
@@ -114,7 +122,7 @@ PIIRS addresses these challenges by providing:
 
 **Community Engagement**
 - Upvote important issues to show community support
-- Comment system for discussion and updates
+- Comment system with AI-powered sentiment summary
 - View trending issues in your area
 - Follow specific issues for notifications
 
@@ -129,6 +137,15 @@ PIIRS addresses these challenges by providing:
 - Track resolved vs pending issues
 - Engagement statistics
 - Subscription management
+
+**Event Participation**
+- Register as volunteer or guest for community events
+- Join without login as a free participant (phone + email only)
+- Donate to event fund goals via Stripe
+- Receive QR code via email for event day attendance
+- Earn digital participation certificates after attending
+- Download PDF certificates and share on LinkedIn
+- Verify any certificate publicly at `/verify/:certId`
 
 ### Staff Features
 
@@ -149,6 +166,12 @@ PIIRS addresses these challenges by providing:
 - Response time tracking
 - Issue volume statistics
 - Performance comparisons
+
+**Event Check-in**
+- Mobile QR scanner page for event day attendance
+- Scan volunteer, guest, and free participant QR codes
+- Manual email-based fallback check-in
+- Live attendance counter with auto-refresh
 
 ### Administrator Features
 
@@ -173,9 +196,17 @@ PIIRS addresses these challenges by providing:
 
 **Content Moderation**
 - Review flagged comments
-- Toxicity detection system
+- Toxicity detection system (keyword + TensorFlow)
 - User report management
 - Automated content filtering
+
+**Event Management (Steps 1–6)**
+- Create events with multi-step form (type, location, dates, capacity, fees, fund goal)
+- Manage confirmed volunteers, waitlist, and free participants
+- Change event status with auto-refund on cancellation
+- Log post-event spending breakdown for donor transparency
+- Generate batch PDF certificates for all attended participants
+- Resend individual certificate emails with optional override address
 
 ---
 
@@ -184,12 +215,12 @@ PIIRS addresses these challenges by providing:
 ### Backend Framework
 
 **Node.js**
-- Version: 14.0.0 or higher
+- Version: 18.0.0 or higher
 - Provides non-blocking I/O for real-time updates
 - Scalable event-driven architecture
 - Large ecosystem of packages
 
-**Express.js**
+**Express.js v5**
 - Minimalist web framework
 - Fast and flexible routing
 - Robust middleware support
@@ -197,10 +228,10 @@ PIIRS addresses these challenges by providing:
 
 ### Database
 
-**MongoDB**
-- NoSQL document database
-- Flexible schema for evolving civic data
-- Powerful aggregation framework
+**MongoDB (Native Driver)**
+- NoSQL document database — no Mongoose ODM
+- All queries use native driver: `collection.find()`, `insertOne()`, `updateOne()`, etc.
+- Powerful aggregation framework used for complex lookups and stats
 - Excellent for hierarchical data structures
 
 **MongoDB Atlas**
@@ -214,83 +245,118 @@ PIIRS addresses these challenges by providing:
 **Firebase Authentication**
 - Secure multi-provider authentication
 - Email/password authentication
-- Social login support (Google, Facebook)
+- Social login support (Google)
 - Phone number verification
 
-**Firebase Admin SDK**
-- Server-side token verification
-- User management APIs
+**Firebase Admin SDK v13**
+- Server-side token verification via `verifyFBToken` middleware
+- `req.decoded_email` pattern used throughout
 - Custom claims for role-based access
-- Secure service account authentication
+- Secure service account authentication via base64-encoded env variable
 
 ### Payment Processing
 
-**Stripe**
+**Stripe v20**
 - PCI DSS compliant payment processing
-- Subscription management
-- Webhook integration for real-time events
-- Strong fraud prevention
+- Checkout sessions for event registration fees and donations
+- Subscription management (Basic/Premium plans)
+- Webhook integration for real-time payment confirmation
+- Auto-refund on event cancellation
 
-### Additional Technologies
+### Email
 
-**CORS**
-- Cross-Origin Resource Sharing middleware
-- Configurable access control
-- Security headers management
+**Nodemailer v8**
+- Transactional email via Gmail SMTP
+- HTML email templates for:
+  - Volunteer/guest registration confirmation (with QR code)
+  - Free participant confirmation
+  - Waitlist confirmation and promotion
+  - Payment confirmation
+  - Donor thank-you
+  - Event reminder (24h cron)
+  - Digital certificate delivery (PDF attachment)
 
-**dotenv**
-- Environment variable management
-- Secure configuration handling
-- Development/production separation
+### PDF Generation
+
+**Puppeteer Core v25 + @sparticuz/chromium v149**
+- Headless Chrome for server-side HTML → PDF rendering
+- A4 landscape certificates with per-event-type color themes
+- One browser instance reused per batch for performance
+- Temporary files written to disk, cleaned up after upload
+
+### Cloud Storage
+
+**Cloudinary v2**
+- PDF certificate storage with `resource_type: "raw"`
+- Permanent signed URLs for download and email attachment
+- Organized by event ID in folder structure
+- `cloudinaryPublicId` stored per certificate for future deletion
+
+### AI & Machine Learning
+
+**@google/generative-ai v0.24 (Gemini 2.5 Flash)**
+- AI-powered comment insight and sentiment summary
+- Analyzes all comments + replies on an issue or event
+- Returns structured summary (positive themes, concerns, overall mood)
+- Displayed as collapsible panel on detail pages
+
+**@tensorflow-models/toxicity + @tensorflow/tfjs v4**
+- ML-based toxicity detection on user comments
+- Supplements keyword-based detection
+- Runs inference server-side at comment submission time
+- Score stored per comment for moderation dashboard
+
+### Real-time
+
+**Socket.io v4**
+- Bidirectional real-time communication
+- Event updates and live attendance stats
+- Notification delivery
+
+### QR Code
+
+**qrcode v1.5**
+- Server-side QR token generation
+- Used in email confirmations (`QRCode.toBuffer()` for inline attachment)
+- Each volunteer/guest/free participant gets a unique UUID-based token
+
+### Other Utilities
+
+**UUID v9** — Unique token generation for QR codes (`uuidv4()`) and certificate IDs (`CERT-{year}-{4chars}`)
+
+**CORS** — Cross-origin resource sharing middleware
+
+**dotenv v17** — Environment variable management
 
 ---
 
 ## System Architecture
+
 ### Request Flow
 
-1. Client sends request with Firebase ID token
-2. Express middleware verifies token with Firebase Admin SDK
-3. Request is authorized based on user role
-4. Business logic processes the request
-5. MongoDB operations are performed
-6. Response is sent back to client
+1. Client sends request with Firebase ID token in `Authorization: Bearer <token>` header
+2. `verifyFBToken` middleware verifies token with Firebase Admin SDK
+3. `req.decoded_email` is set from decoded token
+4. Business logic performs inline admin/role check via `userCollection.findOne()`
+5. MongoDB native driver operations are performed (no Mongoose)
+6. Response sent via `res.send()` throughout
 
 ### Database Collections
 
-**users**
-- Stores citizen, staff, and admin profiles
-- Contains authentication details and statistics
-- Subscription information
-
-**issues**
-- All reported issues with full details
-- Status tracking and priority information
-- Assignment and resolution data
-
-**comments**
-- User comments on issues
-- Toxicity scores for moderation
-- Hierarchical structure for replies
-
-**upvotes**
-- User voting records
-- Prevents duplicate votes
-- Enables upvote counting
-
-**timeline**
-- Complete history of issue changes
-- Staff actions and updates
-- System events
-
-**payments**
-- Stripe transaction records
-- Subscription history
-- Payment status tracking
-
-**reports**
-- Flagged content reports
-- Moderation queue
-- Admin review tracking
+| Collection | Purpose |
+|---|---|
+| `user` | Citizens, staff, admins — roles, subscription, stats |
+| `issue` | Reported civic issues with status, priority, assignment |
+| `comment` | Issue and event comments with toxicity scores and replies |
+| `upvote` | Per-issue upvote tracking with user map |
+| `timeline` | Complete history of issue status changes |
+| `payment` | All Stripe transaction records |
+| `report` | Flagged content reports and moderation queue |
+| `event` | Community events with capacity, fee, and fund settings |
+| `eventRegistration` | Volunteer + guest registrations with QR tokens and status |
+| `donation` | Event donations via Stripe |
+| `participants` | Free participants (no login) — name, email, phone, QR token |
+| `certificate` | Issued digital certificates with Cloudinary PDF URL and verify link |
 
 ---
 
@@ -300,98 +366,136 @@ PIIRS addresses these challenges by providing:
 
 ```
 Development: http://localhost:5000
-Production: https://api.yourdomain.com
+Production:  https://api.yourdomain.com
 ```
 
 ### Authentication
 
-Protected endpoints require a Firebase ID token in the Authorization header:
+Protected endpoints require a Firebase ID token:
 ```
 Authorization: Bearer <firebase_id_token>
 ```
 
 ### Public Endpoints
 
-| Method | Endpoint | Description | Parameters |
-|--------|----------|-------------|------------|
-| GET | `/allissues` | Get all reviewed issues with pagination | `page` (query, optional), `limit` (query, optional) |
-| GET | `/detailIssues/:id` | Get detailed information about a specific issue | `id` (path, required) |
-| POST | `/view-count/:issueId` | Increment view count for an issue | `issueId` (path, required) |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/allissues` | Get all reviewed issues with pagination |
+| `GET` | `/detailIssues/:id` | Get detailed issue information |
+| `POST` | `/view-count/:issueId` | Increment issue view count |
+| `GET` | `/events` | Get all events (filter by status, type, search) |
+| `GET` | `/events/:id` | Get event detail with volunteers, donations, free participants |
+| `POST` | `/events/:id/free-participate` | Register as free participant (no login) |
+| `POST` | `/events/:id/donate` | Donate to event fund (optional auth) |
+| `GET` | `/verify-donation/:sessionId` | Verify donation payment |
+| `GET` | `/verify/:certId` | Publicly verify a participation certificate |
+| `GET` | `/map-view/issues` | Get issues for map display |
 
-### User Management Endpoints
+### User Management
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| GET | `/user/role/:email` | Get user role by email | No | Public |
-| GET | `/user/citizen` | Get current authenticated user profile | Yes | All |
-| PATCH | `/user/update` | Update user profile (name, phone, address) | Yes | All |
-| GET | `/allusers` | Get all users in the system | Yes | Admin |
-| GET | `/allstaff` | Get all staff members | Yes | Admin |
-| POST | `/create/user` | Create new user account (staff/citizen) | Yes | Admin |
-| PATCH | `/role/update` | Update user role | Yes | Admin |
-| DELETE | `/delete/staff/:id` | Delete a staff member | Yes | Admin |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `GET` | `/user/role/:email` | — | Public | Get user role |
+| `GET` | `/user/citizen` | ✓ | All | Get current user profile |
+| `PATCH` | `/user/update` | ✓ | All | Update profile |
+| `GET` | `/allusers` | ✓ | Admin | Get all users |
+| `GET` | `/allstaff` | ✓ | Admin | Get all staff |
+| `POST` | `/addstaff` | ✓ | Admin | Create staff account |
+| `PATCH` | `/update/staff/info` | ✓ | Admin | Update staff info |
+| `PATCH` | `/update/user/status` | ✓ | Admin | Block/unblock user |
+| `DELETE` | `/delete/staff/:id` | ✓ | Admin | Delete staff |
 
-### Issue Management Endpoints
+### Issue Management
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| POST | `/create-issue` | Create a new issue report | Yes | Citizen |
-| GET | `/myissues/:id` | Get all issues reported by user | Yes | All |
-| GET | `/manageissues/:email` | Get issues by citizen email | Yes | All |
-| PATCH | `/issue/:id` | Update issue details | Yes | Owner |
-| DELETE | `/issue/:id` | Delete an issue | Yes | Owner |
-| GET | `/admin/allissues` | Get all issues (admin view) | Yes | Admin |
-| POST | `/assign-issue` | Assign issue to staff member | Yes | Admin |
-| PATCH | `/update-priority/:id` | Update issue priority level | Yes | Admin |
-| PATCH | `/update-review/:id` | Update issue review status | Yes | Admin |
-| PATCH | `/reject-issue/:id` | Reject an issue with reason | Yes | Admin |
-| GET | `/assigned-issues/:staffId` | Get issues assigned to staff | Yes | Staff/Admin |
-| PATCH | `/assigned/:issueId` | Update assigned issue status | Yes | Staff |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `POST` | `/addissue` | ✓ | Citizen | Create issue report |
+| `GET` | `/myissues/:id` | ✓ | All | Get user's issues |
+| `GET` | `/manageissues/:email` | ✓ | All | Get issues by email |
+| `GET` | `/admin/allissues` | ✓ | Admin | Get all issues |
+| `PATCH` | `/issue/:id` | ✓ | Owner | Update issue |
+| `DELETE` | `/issue/:id` | ✓ | Owner | Delete issue |
+| `POST` | `/assign-staff` | ✓ | Admin | Assign issue to staff |
+| `PATCH` | `/update-review/:id` | ✓ | Super Staff | Approve/reject review |
+| `PATCH` | `/reject-issue` | ✓ | Admin | Reject issue with reason |
+| `GET` | `/assigned-issues/:staffId` | ✓ | Staff | Get assigned issues |
+| `PATCH` | `/update-issue-status/:issueId` | ✓ | Staff | Update issue status |
+| `POST` | `/report-issue/:id` | ✓ | All | Report an issue |
+| `GET` | `/review-issues` | ✓ | Super Staff | Get issues for review |
 
-### Comment System Endpoints
+### Event Management
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| GET | `/comments/:issueId` | Get all comments for an issue | Yes | All |
-| POST | `/comments` | Add a comment to an issue | Yes | All |
-| PATCH | `/comments/:commentId` | Update an existing comment | Yes | Owner |
-| DELETE | `/comments/:commentId` | Delete a comment | Yes | Owner/Admin |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `POST` | `/events/create` | ✓ | Admin | Create event |
+| `PATCH` | `/admin/events/:id` | ✓ | Admin | Edit event |
+| `PATCH` | `/admin/events/:id/status` | ✓ | Admin | Change event status (cancel = auto-refund) |
+| `GET` | `/admin/events` | ✓ | Admin | List all events with stats |
+| `GET` | `/admin/events/stats` | ✓ | Admin | Platform-wide event stats |
+| `GET` | `/admin/events/:id/manage` | ✓ | Admin | Single event deep management |
+| `GET` | `/admin/event/:id/detail` | ✓ | Admin | Event title/date/status |
+| `POST` | `/events/:id/volunteer` | ✓ | Citizen | Register as volunteer or guest |
+| `GET` | `/events/:id/volunteers` | ✓ | Admin | Get confirmed volunteers |
+| `GET` | `/events/:id/waitlist` | ✓ | Admin | Get waitlisted registrations |
+| `GET` | `/admin/waitlists` | ✓ | Admin | All events with waitlists |
+| `DELETE` | `/admin/events/:eventId/free-participant/:id` | ✓ | Admin | Remove free participant |
+| `GET` | `/verify-event-reg-pay/:sessionId` | ✓ | All | Verify registration payment |
 
-### Voting System Endpoints
+### QR Check-in
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| GET | `/upvotes/:issueId` | Get upvote status for issue | Yes | All |
-| POST | `/upvote` | Upvote an issue | Yes | All |
-| DELETE | `/upvote/:issueId` | Remove upvote from issue | Yes | All |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `POST` | `/events/:id/checkin` | ✓ | Staff/Admin | QR scan check-in (volunteer, guest, free) |
+| `POST` | `/events/:id/checkin/manual` | ✓ | Admin | Manual check-in by email |
+| `DELETE` | `/events/:id/checkin/:regId?source=` | ✓ | Admin | Undo check-in (`source` param routes to correct collection) |
+| `GET` | `/events/:id/checkin/stats` | ✓ | Staff/Admin | Live attendance stats with breakdown |
+| `GET` | `/events/:id/checkin/verify/:qrToken` | ✓ | Staff/Admin | Pre-check QR without marking attendance |
 
-### Report Management Endpoints
+### Certificates
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| GET | `/reports` | Get all issue reports | Yes | Admin |
-| POST | `/report-issue` | Report an inappropriate issue | Yes | All |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `POST` | `/admin/events/:id/certificates/generate` | ✓ | Admin | Batch generate PDFs (async background) |
+| `GET` | `/admin/events/:id/certificates/status` | ✓ | Admin | Generation progress |
+| `GET` | `/admin/events/:id/certificates` | ✓ | Admin | List all certificates for event |
+| `POST` | `/admin/events/:id/certificates/:certId/resend` | ✓ | Admin | Resend certificate email |
+| `GET` | `/verify/:certId` | — | Public | Verify certificate |
+| `GET` | `/my-certificates` | ✓ | Citizen | Get user's own certificates |
 
-### Timeline Endpoints
+### Comments & Engagement
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| GET | `/timeline/:issueId` | Get timeline of changes for issue | Yes | All |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `GET` | `/comments/:issueId` | — | All | Get issue comments |
+| `POST` | `/comments/:issueId` | ✓ | All | Post issue comment |
+| `POST` | `/comments/reply/:commentId` | ✓ | All | Reply to comment |
+| `DELETE` | `/comments/:commentId` | ✓ | Owner/Admin | Delete comment |
+| `POST` | `/events/:eventId/comments` | ✓ | All | Post event comment |
+| `DELETE` | `/events/comments/:commentId` | ✓ | Owner/Admin | Delete event comment |
+| `PATCH` | `/events/comments/:commentId/pin` | ✓ | Admin | Pin/unpin event comment |
+| `POST` | `/upvote/:issueId` | ✓ | All | Toggle upvote on issue |
+| `GET` | `/upvote-info/:issueId` | — | All | Get upvote count + user status |
+| `GET` | `/all-upvotes` | — | All | Get all upvote records |
 
-### Payment System Endpoints
+### Payment System
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| POST | `/create-payment-intent` | Create Stripe payment intent | Yes | All |
-| POST | `/webhook` | Handle Stripe webhook events | No | System |
-| GET | `/subscription/:userId` | Get user subscription status | Yes | All |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `POST` | `/create-checkout-session` | ✓ | All | Create Stripe session (subscription/boost) |
+| `GET` | `/verify-payment/:sessionId` | ✓ | All | Verify subscription payment |
+| `GET` | `/verify-boost-payment/:sessionId` | ✓ | All | Verify issue boost payment |
+| `GET` | `/user-payment-history/:userId` | ✓ | Citizen | Payment history |
+| `GET` | `/admin/payment-history` | ✓ | Admin | All transactions |
+| `GET` | `/payment-details/:paymentId` | ✓ | All | Payment detail |
 
-### Analytics Endpoints
+### Analytics & Stats
 
-| Method | Endpoint | Description | Auth Required | Role |
-|--------|----------|-------------|---------------|------|
-| GET | `/admin/analytics` | Get comprehensive dashboard analytics | Yes | Admin |
-| GET | `/staff/analytics/:staffId` | Get staff performance metrics | Yes | Staff/Admin |
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| `GET` | `/user/stats` | ✓ | All | User dashboard stats with range filter |
+| `GET` | `/user/issues-over-time` | ✓ | All | Issues over time chart data |
+| `GET` | `/user/dashboard/recent-issues` | ✓ | All | Recent issues + quick stats |
+| `GET` | `/timeline/:timelineId` | — | All | Issue timeline |
 
 ---
 
@@ -401,53 +505,41 @@ Authorization: Bearer <firebase_id_token>
 
 **Firebase Authentication**
 - Industry-standard authentication system
-- Support for email/password, Google, Facebook, and phone authentication
+- Support for email/password and Google authentication
 - Automatic token refresh and session management
 - Multi-factor authentication support
 
 **Role-Based Access Control (RBAC)**
-- Three distinct roles: citizen, staff, admin
-- Granular permissions for each role
-- Middleware verification on all protected routes
-- Custom claims for additional authorization logic
+- Three distinct roles: `citizen`, `staff`, `admin`
+- Inline admin check pattern throughout: `userCollection.findOne({ email: req.decoded_email })`
+- `verifyFBToken` middleware sets `req.decoded_email` on all protected routes
+- `optionalFBToken` middleware for routes that work with or without auth (e.g. donations)
 
 **Token Verification**
-- Server-side verification of Firebase ID tokens
+- Server-side verification of Firebase ID tokens via `admin.auth().verifyIdToken()`
 - Automatic token expiration handling
 - Secure token transmission over HTTPS
-- Protection against token replay attacks
 
 ### Content Moderation
 
-**Toxicity Detection System**
+**Dual Toxicity Detection System**
 
-The platform includes a custom-built toxicity detection system that protects the community from harmful content.
+The platform uses two complementary approaches:
 
-**Features:**
-- Real-time analysis of all user comments
-- Multilingual support (English and Bangla)
-- Keyword-based detection with scoring system
-- Automatic flagging of toxic content
-- Admin review queue for flagged content
+**1. Keyword-based (`checkToxicity.js`)**
+- Custom list of toxic keywords in English and Bangla
+- Each keyword adds 15% to toxicity score (capped at 100%)
+- Severe threats auto-score 90%
+- Comments scoring 85%+ flagged as toxic
+- `isToxic`, `score`, `foundKeywords` returned per analysis
 
-**Detection Mechanism:**
+**2. TensorFlow ML (`@tensorflow-models/toxicity`)**
+- Pre-trained toxicity model runs server-side
+- Multi-label classification (identity attack, insult, threat, etc.)
+- Supplements keyword detection for context-aware moderation
+- Inference run at comment submission time
 
-The system maintains a comprehensive list of toxic keywords in both English and Bangla. Each comment is analyzed for:
-- Direct keyword matches
-- Severity of language used
-- Context-based threat detection
-
-**Scoring System:**
-- Each toxic keyword adds 15% to the toxicity score
-- Maximum score is capped at 100%
-- Severe threats (death, violence) automatically score 90%
-- Comments scoring 85% or higher are flagged as toxic
-
-**Integration:**
-- Automatic scanning on comment submission
-- Toxicity score stored with each comment
-- Moderator dashboard for review
-- Option to auto-reject highly toxic content
+Both scores are stored on the comment document for moderation dashboard review.
 
 ### Data Protection
 
@@ -455,25 +547,23 @@ The system maintains a comprehensive list of toxic keywords in both English and 
 - MongoDB Atlas with encryption at rest
 - TLS/SSL encryption in transit
 - IP whitelist for database access
-- Automated backups and point-in-time recovery
+- Automated backups
 
 **API Security**
-- CORS configuration for controlled access
-- Rate limiting to prevent abuse (planned)
-- Input validation and sanitization
-- Protection against SQL injection and XSS
+- CORS middleware for controlled access
+- Input validation on all mutation endpoints
+- Protection against injection via native MongoDB driver parameterized queries
 
 **Payment Security**
 - PCI DSS compliant payment processing via Stripe
-- No storage of sensitive payment data
-- Secure webhook signature verification
-- Automatic fraud detection
+- No storage of raw card data
+- Webhook session retrieval for server-side payment verification
+- Auto-refund logic on event cancellation
 
 **Environment Security**
-- Sensitive credentials stored in environment variables
+- All credentials in `.env`
+- Firebase service account stored as base64-encoded env variable (`FB_KEY`)
 - Never committed to version control
-- Separate configurations for development and production
-- Service account key encoding for additional security
 
 ---
 
@@ -506,56 +596,16 @@ A mid-sized city implemented PIIRS in January 2025 to modernize their civic enga
 - 45 staff members efficiently managing workload
 - 23% reduction in recurring issues through data-driven prevention
 
-### Community Empowerment
+### Community Event Impact
 
-**Example Scenario: Park Safety Initiative**
+**Example: Plantation Drive, Uttara — April 2025**
 
-**Day 1:** A citizen reports broken playground equipment with photos showing rust and sharp edges that pose safety risks to children.
-
-**Day 1 (Evening):** 127 neighbors from the community upvote the issue, demonstrating widespread concern.
-
-**Day 2:** The city administrator reviews analytics, notices the high community engagement, and assigns the issue to the Parks and Recreation Department as "High Priority."
-
-**Day 3:** Parks staff member arrives on-site, updates status to "In-Progress" with field photos, and orders replacement equipment.
-
-**Day 7:** New equipment is installed. Staff updates issue to "Resolved" with before/after photos.
-
-**Day 8:** Citizens receive notifications, visit park, and leave positive feedback on the platform.
-
-**Impact:**
-- Children can play safely again
-- Community feels heard and valued
-- Staff accountability and recognition
-- Transparent government process
-- Data collected for future budget planning
-
-### Data-Driven Governance
-
-**Monthly Analytics Dashboard Benefits:**
-
-**Geographic Analysis**
-- Heat maps identify problem neighborhoods
-- Resource allocation based on actual needs
-- Proactive infrastructure maintenance
-- Budget justification with concrete data
-
-**Trend Analysis**
-- Seasonal patterns (e.g., drainage issues in monsoon)
-- Emerging issues before they become critical
-- Success rate tracking by category
-- Performance benchmarking
-
-**Resource Planning**
-- Optimal staff distribution across departments
-- Workload balancing
-- Hiring needs identification
-- Training requirements assessment
-
-**Impact Measurement**
-- Resolution time trends
-- Citizen satisfaction metrics
-- Cost per issue resolved
-- ROI on civic infrastructure investments
+- 120 volunteers and 40 guests registered
+- 30 free participants joined without login
+- ৳45,000 raised in donations from 28 donors
+- 174 attendees checked in via QR scanner on event day
+- 174 PDF certificates auto-generated and emailed within 10 minutes
+- 0 manual admin actions required after clicking "Generate"
 
 ---
 
@@ -563,23 +613,12 @@ A mid-sized city implemented PIIRS in January 2025 to modernize their civic enga
 
 ### Key Converter (keyConverter.js)
 
-A utility script for converting Firebase service account JSON credentials to base64 encoding for secure environment variable storage.
+Converts Firebase service account JSON to base64 for secure `.env` storage.
 
-**Purpose:**
-- Securely store Firebase credentials
-- Avoid committing sensitive files to version control
-- Enable easy deployment across environments
-
-**Usage:**
-
-Place your Firebase service account JSON file as `piirs.json` in the project root, then run:
 ```bash
 node keyConverter.js
 ```
 
-The script will output a base64-encoded string that you can safely store in your `.env` file.
-
-**Implementation:**
 ```javascript
 const fs = require('fs');
 const key = fs.readFileSync('./piirs.json', 'utf8')
@@ -589,64 +628,45 @@ console.log(base64)
 
 ### Toxicity Checker (checkToxicity.js)
 
-A content moderation utility that analyzes text for toxic content in real-time.
-
-**Features:**
-- Multilingual keyword detection (English and Bangla)
-- Severity scoring system
-- Configurable toxicity threshold
-- Detailed analysis results
-
-**Function Signature:**
-```javascript
-checkToxicity(text)
-```
-
-**Returns:**
-- `score`: Decimal value from 0 to 1 representing toxicity level
-- `isToxic`: Boolean indicating if text exceeds threshold (0.85)
-- `foundKeywords`: Number of toxic keywords detected
-- `error`: Error message if analysis fails
-
-**Integration Example:**
+Keyword-based content moderation utility.
 
 ```javascript
 const { checkToxicity } = require('./checkToxicity')
 
-// Analyze comment before saving
-const analysis = checkToxicity(userComment);
-
-if (analysis.isToxic) {
-    return res.status(400).send({
-        message: 'Comment contains inappropriate content',
-        score: analysis.score
-    });
-}
-
-// Save comment with toxicity score for monitoring
-await commentCollection.insertOne({
-    text: userComment,
-    toxicityScore: analysis.score,
-    userId: currentUser._id,
-    createdAt: new Date()
-});
+const result = checkToxicity(userComment);
+// { score: 0.45, isToxic: false, foundKeywords: 3 }
 ```
 
-**Keyword Categories:**
+- `score` — 0 to 1 toxicity level
+- `isToxic` — `true` if score ≥ 0.85
+- `foundKeywords` — number of matched toxic terms
 
-The system detects several categories of toxic content:
-- Personal insults and derogatory terms
-- Profanity and vulgar language
-- Threats and violent language
-- Both English and Bangla toxic terms
+### Certificate Service (certificate/certificateService.js)
 
-**Customization:**
+Batch PDF generation pipeline:
 
-Administrators can adjust:
-- Keyword list (add/remove terms)
-- Scoring weights per keyword
-- Toxicity threshold
-- Special case handling
+1. `generateCertificateHTML()` — renders themed A4 HTML with per-type colors
+2. `generateOneCertificate()` — Puppeteer page → PDF → Cloudinary upload → MongoDB insert → source collection update
+3. `generateEventCertificates()` — batch loop with shared browser instance, skip-if-exists logic
+4. `sendCertificateEmail()` — Nodemailer HTML email with PDF attachment from Cloudinary URL
+
+Certificate IDs follow the format `CERT-{year}-{4CHAR}` (e.g. `CERT-2025-A3F9`).
+
+### Email Service (emailService.js)
+
+Nodemailer-based transactional email functions:
+
+| Function | Trigger |
+|---|---|
+| `sendRegistrationConfirmation` | Volunteer/guest registered (paid event, pre-payment) |
+| `sendFreeRegistrationConfirmationEmail` | Volunteer/guest confirmed (free event, with QR) |
+| `sendFreeParticipationConfirmation` | Free participant registered (with QR) |
+| `sendWaitlistConfirmation` | Added to waitlist |
+| `sendWaitlistPromotion` | Promoted from waitlist to confirmed |
+| `sendPaymentConfirmationEmail` | Stripe payment verified (with QR) |
+| `sendEventReminder` | 24h before event (cron job) |
+| `sendDonorThankYou` | Donation verified |
+| `sendCertificateEmail` | Certificate generated (PDF attachment) |
 
 ---
 
@@ -654,119 +674,97 @@ Administrators can adjust:
 
 ### Optimization Strategies
 
-**Database Optimization**
-- Strategic indexing on frequently queried fields (email, status, priority)
-- Aggregation pipelines for complex queries
-- Pagination to limit data transfer
-- Connection pooling for efficient resource usage
+**Database**
+- Strategic indexing on `email`, `status`, `priority`, `eventId`
+- Aggregation pipelines for complex lookups (e.g. `/admin/events` uses 4 `$lookup` stages)
+- Projection to fetch only needed fields (`.project()`)
+- Pagination on all list endpoints
 
-**API Performance**
-- Async/await for non-blocking operations
-- Efficient data projection (only fetch needed fields)
-- Caching strategy for frequently accessed data (planned)
-- Response compression (planned)
+**Certificate Generation**
+- One Puppeteer browser instance shared across entire batch
+- Temp files written to `/temp-certs/` and deleted immediately after Cloudinary upload
+- `res.send()` before starting generation — response not blocked by heavy work
 
-**Query Optimization**
-- MongoDB aggregation for joins and complex queries
-- Selective field projection to minimize data transfer
-- Efficient sorting with compound indexes
-- Limited result sets with pagination
-
+**Real-time**
+- Socket.io for live event stats without polling
+- `checkin/stats` auto-refreshes every 15s on the scanner page
+- Background cert generation with no client wait
 
 ### Future Improvements
 
-**Phase 1 :**
-- Redis caching layer for frequently accessed data
-- CDN integration for media files
-- WebSocket support for real-time notifications
+**Phase 1:**
+- Redis caching for frequently accessed event/issue data
+- CDN for static assets
+- WebSocket notifications for issue status changes
 - Query optimization based on production patterns
 
-**Phase 2 :**
-- Microservices architecture for better scaling
+**Phase 2:**
+- Microservices separation (events, auth, payments)
 - Database sharding for geographic distribution
-- Advanced caching strategies
+- Job queue (BullMQ) for certificate generation at scale
 - Performance monitoring dashboard
 
-**Phase 3 :**
+**Phase 3:**
 - Multi-region deployment
 - Edge computing for reduced latency
-- Machine learning for predictive scaling
-- Advanced analytics processing
+- ML-powered issue categorization
+- Advanced analytics processing pipeline
 
 ---
 
 ## Contributing
 
-We welcome contributions from the developer community. Here's how you can help:
-
 ### Reporting Issues
-
-When reporting bugs or issues:
 
 1. Check existing issues to avoid duplicates
 2. Provide a clear, descriptive title
-3. Include steps to reproduce the problem
-4. Specify your environment (OS, Node version, etc.)
-5. Add screenshots or error logs if applicable
-
-### Feature Requests
-
-To suggest new features:
-
-1. Open an issue with "[FEATURE REQUEST]" in the title
-2. Describe the feature and its benefits
-3. Explain the use case
-4. Be open to discussion and alternative solutions
+3. Include steps to reproduce
+4. Specify environment (OS, Node version, etc.)
+5. Add screenshots or error logs
 
 ### Pull Requests
 
-**Development Workflow:**
-
 1. Fork the repository
 2. Create a feature branch from `main`
-3. Make your changes with clear, descriptive commits
-4. Test your changes thoroughly
-5. Update documentation if needed
-6. Submit a pull request with detailed description
+3. Make changes with clear commits
+4. Test thoroughly
+5. Update documentation
+6. Submit pull request with detailed description
 
-**Code Style Guidelines:**
+**Code Style:**
+- ES6+ with `"type": "module"` (ESM imports)
+- `async/await` pattern throughout
+- `try/catch` on all async routes
+- `res.send()` not `res.json()`
+- Inline admin check per route, not separate middleware
+- `new ObjectId(id)` explicitly on all ObjectId conversions
 
-- Use ES6+ JavaScript features
-- Follow async/await pattern for asynchronous code
-- Include error handling with try-catch blocks
-- Write descriptive variable and function names
-- Add comments for complex logic
-- Maintain consistent indentation (2 spaces)
+---
 
-**Before Submitting:**
+## Environment Variables
 
-- Ensure all existing tests pass
-- Add tests for new features
-- Update README if you've changed functionality
-- Verify your code with a linter
-- Check for security vulnerabilities
+```env
+PORT=5000
+DB_USER=your_mongodb_username
+DB_PASS=your_mongodb_password
+FB_KEY=your_firebase_service_account_base64
 
-### Development Setup
+FRONTEND_URL=http://localhost:5173
+CLIENT_URL=http://localhost:5173
 
-For contributors:
+stripe_secretKey=your_stripe_secret_key
 
-```bash
-# Fork and clone your fork
-git clone https://github.com/yourusername/piirs-backend.git
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your_gmail_address
+EMAIL_PASS=your_gmail_app_password
+EMAIL_FROM="CommunityFix <noreply@communityfix.com>"
 
-# Add upstream remote
-git remote add upstream https://github.com/originalowner/piirs-backend.git
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Make changes and commit
-git commit -m "Add: your feature description"
-
-# Push to your fork
-git push origin feature/your-feature-name
-
-# Create pull request on GitHub
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ---
@@ -775,23 +773,26 @@ git push origin feature/your-feature-name
 
 This project is licensed under the MIT License.
 
-
 ---
 
 ## Acknowledgments
 
 **Technology Partners:**
-- Firebase team for robust authentication infrastructure
+- Firebase for robust authentication infrastructure
 - MongoDB for flexible and scalable database solutions
 - Stripe for secure payment processing
-- Express.js community for excellent middleware ecosystem
+- Cloudinary for certificate PDF storage and delivery
+- Google Gemini for AI-powered comment analysis
+- Puppeteer / Chromium for server-side PDF rendering
+- TensorFlow.js for ML-based content moderation
+- Socket.io for real-time communication
+- Nodemailer for transactional email delivery
 
 ---
 
 ## Support and Contact
 
 **Email:** mdashikulislam27889@gmail.com
-
 
 ---
 
